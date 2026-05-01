@@ -1,0 +1,155 @@
+{
+	"name": "Zoom",
+	"nameLocale": {
+		"ru": "Zoom",
+		"fr": "Zoom",
+		"es": "Zoom",
+		"pt-BR": "Zoom",
+		"de": "Zoom",
+		"it": "Zoom",
+		"sq-AL": "Zoom",
+		"sr-Cyrl-RS": "Zoom",
+		"sr-Latn-RS": "Zoom"
+	},
+	"guid": "asc.{3f15a9bc-51d3-4b59-b32f-75cfe2f07f54}",
+	"version": "1.0.1",
+
+	"variations": [
+		{
+			"description": "Schedule and hold video meetings right in the editors using Zoom.",
+			"descriptionLocale": {
+				"ru": "Планируйте и проводите видеовстречи прямо в редакторах с помощью Zoom.",
+				"fr": "Planifiez et organisez des réunions vidéo directement dans les éditeurs avec Zoom.",
+				"es": "Planifique y celebre reuniones de vídeo directamente en los editores con Zoom.",
+				"pt-BR": "Agende e realize videoconferências diretamente nos editores usando o Zoom.",
+				"de": "Planen und halten Sie Videokonferenzen mit Zoom direkt in den Editoren.",
+				"it": "Pianifica e organizza riunioni video direttamente negli editor utilizzando Zoom.",
+				"sq-AL": "Planifikoni dhe mbani takime video drejtpërdrejt në redaktorët duke përdorur Zoom.",
+				"sr-Cyrl-RS": "Закажите и одржавајте видео састанке директно у уређивачима користећи Zoom.",
+				"sr-Latn-RS": "Zakažite i održavajte video sastanke direktno u uređivačima koristeći Zoom."
+			},
+			"url": "index.html",
+
+			"icons": [ "resources/img/icon.png", "resources/img/icon@2x.png" ],
+			"icons2": [
+				{
+					"style" : "light",
+					
+					"100%": {
+						"normal": "resources/light/icon.png"
+					},
+					"125%": {
+						"normal": "resources/light/icon@1.25x.png"
+					},
+					"150%": {
+						"normal": "resources/light/icon@1.5x.png"
+					},
+					"175%": {
+						"normal": "resources/light/icon@1.75x.png"
+					},
+					"200%": {
+						"normal": "resources/light/icon@2x.png"
+					}
+				},
+				{
+					"style" : "dark",
+					
+					"100%": {
+						"normal": "resources/dark/icon.png"
+					},
+					"125%": {
+						"normal": "resources/dark/icon@1.25x.png"
+					},
+					"150%": {
+						"normal": "resources/dark/icon@1.5x.png"
+					},
+					"175%": {
+						"normal": "resources/dark/icon@1.75x.png"
+					},
+					"200%": {
+						"normal": "resources/dark/icon@2x.png"
+					}
+				}
+			],
+			"isViewer": false,
+			"EditorsSupport": [ "word", "slide", "cell" ],
+
+			"isVisual": true,
+			"isModal": false,
+			"isInsideMode": true,
+
+			"initDataType": "none",
+			"initData": "",
+
+			"isUpdateOleOnResize": false,
+
+			"buttons": [
+				{
+					"text": "Close",
+					"primary": true,
+					"textLocale": {
+						"ru": "Закрыть",
+						"fr": "Fermer",
+						"es": "Cerrar",
+						"de": "Schließen",
+						"it": "Chiudi",
+						"sq-AL": "Mbyllni",
+						"sr-Cyrl-RS": "Затвори",
+						"sr-Latn-RS": "Zatvori"
+					}
+				}
+			],
+			"store": {
+				"background": {
+					"light" : "#008DFF",
+					"dark" : "#008DFF"
+				},
+				"screenshots" : [
+					"resources/store/screenshots/screen_1.png",
+					"resources/store/screenshots/screen_2.png"
+				],
+				"icons" : {
+					"light" : "resources/store/icons",
+					"dark"  : "resources/store/icons"
+				},
+				"categories": ["specAbilities", "entertainment", "communication"]
+			}
+		},
+		{
+			"description": "About",
+			"descriptionLocale": {
+				"ru": "Справка",
+				"fr": "À propos",
+				"es": "Sobre programa",
+				"de": "Über",
+				"it": "Informazioni su",
+				"sq-AL": "Rreth",
+				"sr-Cyrl-RS": "У вези",
+				"sr-Latn-RS": "U vezi"
+			},
+			"url": "index_about.html",
+
+			"icons": [ "resources/img/icon.png", "resources/img/icon@2x.png", "resources/img/icon2.png", "resources/img/icon2@2x.png" ],
+			"isViewer": false,
+			"EditorsSupport": [ "word", "slide", "cell" ],
+
+			"isVisual": true,
+			"isModal": true,
+			"isInsideMode": false,
+
+			"initDataType": "none",
+			"initData": "",
+
+			"isUpdateOleOnResize": false,
+
+			"buttons": [
+				{
+					"text": "Ok",
+					"primary": true
+				}
+			],
+
+			"size": [ 392, 147 ]
+		}
+	]
+}
