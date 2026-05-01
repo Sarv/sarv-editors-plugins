@@ -1,0 +1,193 @@
+{
+    "name": "ZhiPu Copilot",
+    "nameLocale": {
+        "zh": "智谱 Copilot",
+        "de": "ZhiPu Copilot",
+        "ru": "ZhiPu Copilot",
+        "fr": "ZhiPu Copilot",
+        "pt-BR": "ZhiPu Copilot",
+        "es": "ZhiPu Copilot",
+        "cs-CS": "ZhiPu Copilot",
+        "it": "ZhiPu Copilot",
+        "sq-AL": "ZhiPu Copilot",
+        "sr-Cyrl-RS": "ZhiPu Copilot",
+        "sr-Latn-RS": "ZhiPu Copilot"
+    },
+    "guid": "asc.{4b5efd7f-7c8d-1ef4-feab-bfbf2e1d86ac}",
+    "baseUrl": "",
+    "version": "2.0.1",
+    "offered": "Jianbo Lin and Linji Zhang",
+    "variations": [
+        {
+            "description": "Easily generate high-quality articles, interpret complex spreadsheet data, create powerpoint Outlines, and more with an AI assistant based on ChatGLM's large model.",
+            "descriptionLocale": {
+                "zh": "基于智谱 ChatGLM 大模型的 Sarv Office 文档 Copilot 插件",
+                "de": "Ein Copilot-Plugin für Sarv Office-Dokumente basierend auf dem ZhiPu ChatGLM-Modell.",
+                "ru": "Плагин Copilot для документов Sarv Office на основе модели ZhiPu ChatGLM.",
+                "fr": "Un plugin copilote pour les documents Sarv Office basé sur le modèle ZhiPu ChatGLM.",
+                "pt-BR": "Um plugin copiloto para Sarv Office Document baseado no modelo ZhiPu ChatGLM.",
+                "es": "Un complemento de copiloto para documentos de Sarv Office basado en el modelo ZhiPu ChatGLM.",
+                "cs-CS": "Copilot plugin pro dokument Sarv Office založený na modelu ZhiPu ChatGLM.",
+                "it": "Un plugin copilot per Sarv Office basato sul modello ZhiPu ChatGLM.",
+                "sq-AL": "Një shtojcë copilot për Sarv Office Document bazuar në modelin e ZhiPu ChatGLM.",
+				"sr-Cyrl-RS": "Copilot додатак за Sarv Office документ заснован на ZhiPu ChatGLM моделу.",
+                "sr-Latn-RS": "Copilot dodatak za Sarv Office dokument zasnovan na ZhiPu ChatGLM modelu."
+            },
+            "url": "index.html",
+            "icons": [
+                "resources/light/icon.png",
+                "resources/light/icon@2x.png"
+            ],
+            "icons2": [
+                {
+                    "style": "light",
+                    "100%": {
+                        "normal": "resources/light/icon.png"
+                    },
+                    "125%": {
+                        "normal": "resources/light/icon@1.25x.png"
+                    },
+                    "150%": {
+                        "normal": "resources/light/icon@1.5x.png"
+                    },
+                    "175%": {
+                        "normal": "resources/light/icon@1.75x.png"
+                    },
+                    "200%": {
+                        "normal": "resources/light/icon@2x.png"
+                    }
+                },
+                {
+                    "style": "dark",
+                    "100%": {
+                        "normal": "resources/dark/icon.png"
+                    },
+                    "125%": {
+                        "normal": "resources/dark/icon@1.25x.png"
+                    },
+                    "150%": {
+                        "normal": "resources/dark/icon@1.5x.png"
+                    },
+                    "175%": {
+                        "normal": "resources/dark/icon@1.75x.png"
+                    },
+                    "200%": {
+                        "normal": "resources/dark/icon@2x.png"
+                    }
+                }
+            ],
+            "store": {
+                "background": {
+                    "light": "#7c84e8",
+                    "dark": "#5f55af"
+                },
+                "screenshots": [
+                    "resources/store/screenshots/screen_1.png",
+                    "resources/store/screenshots/screen_2.png",
+                    "resources/store/screenshots/screen_3.png",
+                    "resources/store/screenshots/screen_4.png",
+                    "resources/store/screenshots/screen_5.png",
+                    "resources/store/screenshots/screen_6.png",
+                    "resources/store/screenshots/screen_7.png",
+                    "resources/store/screenshots/screen_8.png",
+                    "resources/store/screenshots/screen_9.png",
+                    "resources/store/screenshots/screen_10.png",
+                    "resources/store/screenshots/screen_11.png"
+                ],
+                "icons": {
+                    "light": "resources/store/icons",
+                    "dark": "resources/store/icons"
+                },
+                "categories": [
+                    "specAbilities",
+                    "work"
+                ]
+            },
+            "isViewer": true,
+            "EditorsSupport": [
+                "word","cell","slide"
+            ],
+            "isVisual": true,
+            "isModal": true,
+            "isInsideMode": true,
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": true,
+            "buttons": [],
+            "events": [
+                "onContextMenuShow",
+                "onContextMenuClick"
+            ]
+        },
+        {
+            "description": "setting",
+            "descriptionLocale": {
+                "zh": "设置",
+                "de": "Einstellung",
+                "ru": "настройка",
+                "fr": "réglage",
+                "pt-BR": "Ajuste",
+                "es": "Ajuste"
+            },
+            "url": "index_setting.html",
+            "isViewer": false,
+            "EditorsSupport": [
+                "word","cell","slide"
+            ],
+            "isVisual": true,
+            "isModal": true,
+            "isInsideMode": false,
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": true,
+            "buttons": [
+                {
+                    "text": "Ok",
+                    "textLocale": {
+                        "zh": "确定",
+                        "de": "Ok",
+                        "ru": "Ok",
+                        "fr": "Ok",
+                        "es": "Ok",
+                        "it": "Ok",
+                        "sq-AL": "Ok",
+                        "sr-Cyrl-RS": "Ok",
+                        "sr-Latn-RS": "Ok"
+                    },
+                    "primary": true
+                }
+            ],
+            "size": [
+                392,
+                147
+            ]
+        },
+        {
+            "description": "custom request",
+            "descriptionLocale": {
+                "zh": "自定义请求",
+                "de": "Benutzerdefinierte Anfrage",
+                "ru": "запрос настроек",
+                "fr": "demande personnalisée",
+                "pt-BR": "Solicitação personalizada",
+                "es": "Solicitud personalizada"
+            },
+            "url": "custom_req_window.html",
+            "isViewer": false,
+            "EditorsSupport": [
+                "word","cell","slide"
+            ],
+            "isVisual": true,
+            "isModal": true,
+            "isInsideMode": false,
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": true,
+            "buttons": [],
+            "size": [
+                400,
+                400
+            ]
+        }
+    ]
+}
