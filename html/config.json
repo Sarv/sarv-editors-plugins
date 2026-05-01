@@ -1,0 +1,101 @@
+{
+	"name": "HTML",
+	"nameLocale": {
+		"ru": "HTML",
+		"fr": "HTML",
+		"es": "HTML",
+		"pt-BR": "HTML",
+		"de": "HTML",
+		"it": "HTML",
+		"sq-AL": "HTML",
+		"sr-Cyrl-RS": "HTML",
+		"sr-Latn-RS": "HTML",
+		"zh-ZH": "HTML"
+	},
+	"guid": "asc.{E581C417-3C80-4BC2-B42D-502850FDC1E7}",
+	"version": "1.0.3",
+
+	"variations": [
+		{
+			"description": "Get your document content as HTML code, modify it, and paste back to the document.",
+			"descriptionLocale": {
+				"ru": "Получите содержимое документа в виде HTML-кода с возможностью отредактировать полученный результат.",
+				"fr": "Obtenez le contenu de votre document sous forme de code HTML, modifiez-le et collez-le dans le document.",
+				"es": "Obtenga el contenido de su documento como código HTML, modifíquelo y péguelo de nuevo en el documento.",
+				"pt-BR": "Obtenha o conteúdo do seu documento como código HTML, modifique-o e cole-o novamente no documento.",
+				"de": "Erhalten Sie den Inhalt Ihres Dokuments als HTML-Code, modifizieren und fügen Sie ihn wieder ins Dokument ein.",
+				"it": "Ottieni il contenuto del tuo documento come codice HTML, modificalo e incollalo di nuovo nel documento.",
+				"sq-AL": "Merrni përmbajtjen e dokumentit si kod HTML, ndryshojeni dhe ngjiteni përsëri në dokument.",
+				"sr-Cyrl-RS": "Добијте садржај вашег документа као HTML код, измените га, и залепите назад у документ.",
+				"sr-Latn-RS": "Dobijte sadržaj vašeg dokumenta kao HTML kod, izmenite ga, i zalepite nazad u dokument.",
+				"zh-ZH": "将文档内容转换为 HTML 代码，修改后再粘贴回文档中。"
+			},
+			"url": "index.html",
+
+			"icons": [ "resources/light/icon.png", "resources/light/icon@2x.png" ],
+			"icons2": [
+				{
+					"style" : "light",
+					
+					"100%": {
+						"normal": "resources/light/icon.png"
+					},
+					"125%": {
+						"normal": "resources/light/icon@1.25x.png"
+					},
+					"150%": {
+						"normal": "resources/light/icon@1.5x.png"
+					},
+					"175%": {
+						"normal": "resources/light/icon@1.75x.png"
+					},
+					"200%": {
+						"normal": "resources/light/icon@2x.png"
+					}
+				},
+				{
+					"style" : "dark",
+					
+					"100%": {
+						"normal": "resources/dark/icon.png"
+					},
+					"125%": {
+						"normal": "resources/dark/icon@1.25x.png"
+					},
+					"150%": {
+						"normal": "resources/dark/icon@1.5x.png"
+					},
+					"175%": {
+						"normal": "resources/dark/icon@1.75x.png"
+					},
+					"200%": {
+						"normal": "resources/dark/icon@2x.png"
+					}
+				}
+			],
+			"isViewer": true,
+			"EditorsSupport": [ "word", "cell", "slide", "pdf" ],
+			"isVisual": true,
+			"isModal": false,
+			"isInsideMode": true,
+			"initDataType": "html",
+			"isUpdateOleOnResize": false,
+			"initOnSelectionChanged": true,
+			"store": {
+				"background": {
+					"light" : "#F5F5F5",
+					"dark"  : "#444444"
+				},
+				"screenshots" : [
+					"resources/store/screenshots/screen_1.png",
+					"resources/store/screenshots/screen_2.png"
+				],
+				"icons" : {
+					"light" : "resources/store/icons",
+					"dark"  : "resources/store/icons"
+				},
+				"categories": ["specAbilities", "work", "devTools"]
+			}
+		}
+	]
+}
