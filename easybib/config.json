@@ -1,0 +1,60 @@
+{
+	"name"       : "EasyBib",
+	"nameLocale" : {
+		"ru": "EasyBib",
+		"fr": "EasyBib",
+		"es": "EasyBib",
+		"pt-BR": "EasyBib",
+		"de": "EasyBib",
+		"sq-AL": "EasyBib",
+		"sr-Cyrl-RS": "EasyBib",
+		"sr-Latn-RS": "EasyBib"
+	},
+	"guid"       : "asc.{c9d216a5-4f1a-49f2-9ff0-67c510a73523}",
+	"version"    : "1.0.2",
+	"variations" : [
+		{
+			"description" : "Generate citations and create bibliographies in your documents (compatible with Sarv Office cloud).",
+			"descriptionLocale": {
+				"ru": "Добавляйте библиографии в свои документы (требуется облако Sarv Office).",
+				"fr": "Générez des citations et créez des bibliographies dans vos documents (compatible avec le cloud Sarv Office).",
+				"es": "Genere citas y cree bibliografías en sus documentos (compatible con la nube de Sarv Office).",
+				"pt-BR": "Gere citações e crie bibliografias em seus documentos (compatível com a nuvem Sarv Office).",
+				"de": "Generieren Sie Zitate und erstellen Sie Bibliografien in Ihren Dokumenten (kompatibel mit Sarv Office in der Cloud).",
+				"sq-AL": "Krijoni citime dhe krijoni bibliografi në dokumentet tuaja (kompatibile me renë Sarv Office).",
+				"sr-Cyrl-RS": "Генеришите цитате и креирајте библиографије у вашим документима (компатибилно са Sarv Office облаком).",
+				"sr-Latn-RS": "Generišite citate i kreirajte bibliografije u vašim dokumentima (kompatibilno sa Sarv Office oblakom)."
+			},
+			"url"    : "index.html",
+			"icons"  : [ "resources/img/icon.png", "resources/img/icon@2x.png" ],
+			"icons2" : [
+			{
+				"100%": { "normal": "resources/img/icon.png" },
+				"125%": { "normal": "resources/img/icon@1.25x.png" },
+				"150%": { "normal": "resources/img/icon@1.5x.png" },
+				"175%": { "normal": "resources/img/icon@1.75x.png" },
+				"200%": { "normal": "resources/img/icon@2x.png" }
+			}
+			],
+			"isViewer"            : false,
+			"EditorsSupport"      : ["word"],
+			"initDataType"        : "html",
+			"isVisual"            : true,
+			"isModal"             : false,
+			"isInsideMode"        : true,
+			"isUpdateOleOnResize" : false,
+			"store": {
+				"background": {
+					"light" : "#F9F9F9",
+					"dark" : "#444444"
+				},
+				"screenshots" : ["resources/store/screenshots/screen_1.png"],
+				"icons" : {
+					"light" : "resources/store/icons",
+					"dark"  : "resources/store/icons"
+				},
+				"categories": ["specAbilities", "work"]
+			}
+		}
+	]
+}
