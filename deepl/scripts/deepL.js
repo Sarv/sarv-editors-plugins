@@ -1,0 +1,604 @@
+/*
+ * (c) Copyright Ascensio System SIA 2010
+ *
+ * This program is a free software product. You can redistribute it and/or
+ * modify it under the terms of the GNU Affero General Public License (AGPL)
+ * version 3 as published by the Free Software Foundation. In accordance with
+ * Section 7(a) of the GNU AGPL its Section 15 shall be amended to the effect
+ * that Ascensio System SIA expressly excludes the warranty of non-infringement
+ * of any third-party rights.
+ *
+ * This program is distributed WITHOUT ANY WARRANTY; without even the implied
+ * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR  PURPOSE. For
+ * details, see the GNU AGPL at: http://www.gnu.org/licenses/agpl-3.0.html
+ *
+ * You can contact Ascensio System SIA at 20A-6 Ernesta Birznieka-Upish
+ * street, Riga, Latvia, EU, LV-1050.
+ *
+ * The  interactive user interfaces in modified source and object code versions
+ * of the Program must display Appropriate Legal Notices, as required under
+ * Section 5 of the GNU AGPL version 3.
+ *
+ * Pursuant to Section 7(b) of the License you must retain the original Product
+ * logo when distributing the program. Pursuant to Section 7(e) we decline to
+ * grant you any rights under trademark law for use of our trademarks.
+ *
+ * All the Product's GUI elements, including illustrations and icon sets, as
+ * well as technical writing content are licensed under the terms of the
+ * Creative Commons Attribution-ShareAlike 4.0 International. See the License
+ * terms at http://creativecommons.org/licenses/by-sa/4.0/legalcode
+ *
+ */
+var Ps;
+var sTextBeforeKeyUp = "";
+
+var API_URL_PRO = "https://api.deepl.com/v2";
+var API_URL_FREE = "https://api-free.deepl.com/v2";
+var API_URL_CURRENT = API_URL_FREE;
+
+var API_KEY = "";
+var API_KEY_STORAGE_NAME = "DEEPL_API_INFO";
+
+var PROXY_URL = "https://plugins-services.onlyoffice.com/proxy";
+
+const isIE = checkInternetExplorer();	//check IE
+function checkInternetExplorer(){
+    var rv = -1;
+    if (window.navigator.appName == 'Microsoft Internet Explorer') {
+        const ua = window.navigator.userAgent;
+        const re = new RegExp('MSIE ([0-9]{1,}[\.0-9]{0,})');
+        if (re.exec(ua) != null) {
+            rv = parseFloat(RegExp.$1);
+        }
+    } else if (window.navigator.appName == 'Netscape') {
+        const ua = window.navigator.userAgent;
+        const re = new RegExp('Trident/.*rv:([0-9]{1,}[\.0-9]{0,})');
+
+        if (re.exec(ua) != null) {
+            rv = parseFloat(RegExp.$1);
+        }
+    }
+    return rv !== -1;
+};
+
+(function(window, undefined){
+
+    var txt              = "";
+    var translatedText   = [];
+    var displayNoneClass = "display-none";
+    var blurClass        = "no_class";
+    var elements         = null;
+    var isFirstRun       = true;
+    var paste_done       = true;
+
+    function showLoader(elements, show) {
+        switchClass(elements.contentHolder, blurClass, show);
+        switchClass(elements.loader, displayNoneClass, !show);
+    }
+
+    function switchClass(el, className, add) {
+        if (add) {
+            el.classList.add(className);
+        } else {
+            el.classList.remove(className);
+        }
+    }
+
+    window.Asc.plugin.init = function(text)
+    {
+		if (window.Asc.plugin.info.isViewMode)
+			document.getElementById("paste").classList.add('hidden');
+
+        $('#select_example').select2({
+            minimumResultsForSearch: Infinity,
+        });
+
+        txt = text;
+        updateScroll();
+
+        if ("" === API_KEY && isFirstRun) {
+            isFirstRun = false;
+            return;
+        }
+
+        switch (window.Asc.plugin.info.editorType) {
+            case 'word':
+            case 'slide': {
+                window.Asc.plugin.executeMethod("GetSelectedText", [{Numbering:false, Math: false, TableCellSeparator: '\n', ParaSeparator: '\n'}], function(data) {
+                    txt = data.replace(/\r/g, ' ');
+                    ExecPlugin();
+                });
+                break;
+            }
+            case 'cell':
+                window.Asc.plugin.executeMethod("GetSelectedText", [{Numbering:false, Math: false, TableCellSeparator: '\n', ParaSeparator: '\n'}], function(data) {
+                    if (data == '')
+                        txt = txt.replace(/\r/g, ' ').replace(/\t/g, '\n');
+                    else {
+                        txt = data.replace(/\r/g, ' ');
+                    }
+                    ExecPlugin();
+                });
+                break;
+        }
+    };
+
+    function ExecPlugin() {
+        if (txt !== "")
+            RunTranslate(txt);
+    };
+
+    window.Asc.plugin.onThemeChanged = function(theme)
+    {
+        window.Asc.plugin.onThemeChangedBase(theme);
+        var rule = ".select2-container--default.select2-container--open .select2-selection__arrow b { border-color : " + window.Asc.plugin.theme["text-normal"] + " !important; }";
+        var styleTheme = document.createElement('style');
+        styleTheme.type = 'text/css';
+        styleTheme.innerHTML = rule;
+        document.getElementsByTagName('head')[0].appendChild(styleTheme);
+        $('#show_manually, #hide_manually, #reconf').css('border-bottom', '1px dashed ' + window.Asc.plugin.theme["text-normal"]);
+
+        if (!isIE) {
+            $('.asc-loader-title').css('color', window.Asc.plugin.theme["text-normal"]);
+            $('#show_manually, #hide_manually').css('border-bottom', '1px dashed ' + window.Asc.plugin.theme["text-normal"]);
+            $('#arrow-svg-path').css('fill', theme["text-normal"]);
+        }
+    };
+
+    function GetTargetLang() {
+        return document.getElementsByClassName("prefs__set-locale")[0].value;
+    }
+
+    function DelInvalidChars(arrParas) {
+        for (var nPara = 0; nPara < arrParas.length; nPara++) {
+            var sSearch = '?';
+            var replaceWith = '%3F';
+            arrParas[nPara] = arrParas[nPara].split(sSearch).join(replaceWith);
+
+            sSearch = '#';
+            replaceWith = '%23';
+            arrParas[nPara] = arrParas[nPara].split(sSearch).join(replaceWith);
+
+            sSearch = '&';
+            replaceWith = '%26';
+            arrParas[nPara] = arrParas[nPara].split(sSearch).join(replaceWith);
+        }
+    };
+
+    // save old code. TODO: refactoring
+    function handleSuccess(oResponse) {
+        var container = document.getElementById('txt_shower');
+
+        if ($('#txt_shower').hasClass('error')) $('#txt_shower').toggleClass('error');
+        if ($('#api-value').hasClass('img_error')) $('#api-value').toggleClass('img_error');
+        if ($('#api-value').hasClass('error_api')) $('#api-value').toggleClass('error_api');
+
+        switchClass(elements.api, 'display-none', true);
+        switchClass(elements.re_api, 'display-none', false);
+        switchClass(elements.translator, 'display-none', false);
+
+        container.innerHTML = "";
+
+        if (oResponse.translations) {
+            for (var nText = 0; nText < oResponse.translations.length; nText++) {
+                translatedText.push(oResponse.translations[nText].text);
+                if (oResponse.translations[nText].text !== "")
+                    container.innerHTML += escape(oResponse.translations[nText].text) + '<br>';
+            }
+        }
+
+        if (container.innerHTML !== "" && $('#vanish_container').hasClass('display-none')) {
+            $('#vanish_container').toggleClass('display-none');
+        }
+
+        showLoader(elements, false);
+        updateScroll();
+    }
+
+    function handleError(oResponse) {
+        var container = document.getElementById('txt_shower');
+
+        showLoader(elements, false);
+
+        if (!$('#txt_shower').hasClass('error')) $('#txt_shower').toggleClass('error');
+        if (!$('#api-value').hasClass('error_api')) $('#api-value').toggleClass('error_api');
+
+        if (API_KEY === '') {
+            container.innerHTML = "API key required!";
+        } else {
+            if (oResponse.status === 403) {
+                if (!$('#api-value').hasClass('img_error')) $('#api-value').toggleClass('img_error');
+                container.innerHTML = "API key is not valid!";
+            } else {
+                container.innerHTML = "Connection failed!";
+            }
+        }
+    }
+
+    function checkKey() {
+        let requestUrl = API_URL_CURRENT + "/usage";
+        let requestOptions = {
+            method: "GET",
+            headers: { 
+                "Authorization": "DeepL-Auth-Key " + API_KEY
+            }
+        };
+
+        if (PROXY_URL !== "") {
+            requestOptions = {
+                method: "POST",
+                body: JSON.stringify({
+                    target: requestUrl,
+                    method: requestOptions.method,
+                    headers: requestOptions.headers
+                })
+            };
+            requestUrl = PROXY_URL;
+        }
+
+        fetch(requestUrl, requestOptions)
+        .then(function(response) {
+            if (!response.ok) {
+                handleError(response);
+            }
+            return response.json();
+        })
+        .then(function(response) {
+            if (response.character_limit) {
+
+                localStorage.setItem(API_KEY_STORAGE_NAME, JSON.stringify({
+                    apiKey: API_KEY,
+                    apiUrl: API_URL_CURRENT
+                }));
+
+                handleSuccess(response);
+                return;
+            }
+
+            if (API_URL_CURRENT === API_URL_FREE) {
+                API_URL_CURRENT = API_URL_PRO;
+                checkKey();
+                return;
+            }
+            handleError(response);
+        })
+        .catch(function(response) {
+            if (API_URL_CURRENT === API_URL_FREE) {
+                API_URL_CURRENT = API_URL_PRO;
+                checkKey();
+                return;
+            }
+            handleError(response);
+        });
+    }
+
+    function Translate(targetLanguage, sourceText) {
+        if (!$('#vanish_container').hasClass('display-none'))
+            $('#vanish_container').toggleClass('display-none');
+        showLoader(elements, true);
+
+        let requestUrl = API_URL_CURRENT + "/translate";
+        let data = sourceText + "&target_lang=" + targetLanguage;
+
+        let requestOptions = {
+            method: "POST",
+            headers: { 
+                "Authorization": "DeepL-Auth-Key " + API_KEY
+            },
+            body: data
+        };
+
+        if (PROXY_URL !== "") {
+            requestOptions = {
+                method: "POST",
+                body: JSON.stringify({
+                    target: requestUrl,
+                    method: requestOptions.method,
+                    headers: requestOptions.headers,
+                    data: requestOptions.body
+                })
+            };
+            requestUrl = PROXY_URL;
+        }
+
+        fetch(requestUrl, requestOptions)
+        .then(function(response) {
+            if (!response.ok) {
+                handleError(response);
+            }
+            return response.json();
+        })
+        .then(function(response) {
+            handleSuccess(response);
+        })
+        .catch(function(response) {
+            handleError(response);
+        });
+    };
+
+    function SplitText(sText) {
+        var allParsedParas = sText.split(/\n/);
+        return allParsedParas;
+    }
+
+    function selectText(id) {
+        var sel, range;
+        var el = document.getElementById(id); //get element id
+        if (window.getSelection && document.createRange) { //Browser compatibility
+        sel = window.getSelection();
+        if (sel.toString() == '') { //no text selection
+            window.setTimeout(function(){
+                range = document.createRange(); //range object
+                range.selectNodeContents(el); //sets Range
+                sel.removeAllRanges(); //remove all ranges from selection
+                sel.addRange(range);//add Range to a Selection.
+                document.execCommand("copy"); //copy
+                sel.removeAllRanges(); //remove all ranges from selection
+            },1);
+        }
+        } else if (document.selection) { //older ie
+            sel = document.selection.createRange();
+            if (sel.text == '') { //no text selection
+                range = document.body.createTextRange();//Creates TextRange object
+                range.moveToElementText(el);//sets Range
+                range.select(); //make selection.
+                document.execCommand("copy"); //copy
+            }
+        }
+    }
+
+    $(document).ready(function () {
+        document.getElementById("enter_container").value = '';
+
+        elements = {
+            loader: document.getElementById("loader-container"),
+            contentHolder: document.getElementById("display"),
+            api: document.getElementById("api"),
+            api_value: document.getElementById("api-value"),
+            re_api: document.getElementById("re-api"),
+            translator: document.getElementById("translator"),
+            select: document.getElementById("select_example"),
+            error: document.getElementById("errorWrapper")
+        };
+
+        Ps = new PerfectScrollbar("#display", {suppressScrollX: true});
+
+        setTimeout(function() {
+            document.getElementById("copy").onclick = function () {
+            selectText("txt_shower");
+            }
+        }, 500);
+
+        $('#select_example').on('change', function() {
+            translatedText = [];
+            if (txt !== '')
+                RunTranslate(txt);
+        })
+
+        $('#save').on('click', function() {
+            API_URL_CURRENT = API_URL_FREE;
+            
+            $('#select_example').select2({
+                minimumResultsForSearch: Infinity,
+                width: "calc(100% - 24px)"
+            });
+            API_KEY = elements.api_value.value.trim();
+            if (API_KEY !== '') {
+                document.getElementById('txt_shower').innerHTML = '';
+                var allParsedParas = SplitText(txt);
+                DelInvalidChars(allParsedParas);
+                checkKey();
+            }
+            else {
+                if (!$('#txt_shower').hasClass('error'))
+                    $('#txt_shower').toggleClass('error');
+                if (!$('#api-value').hasClass('error_api'))
+                    $('#api-value').toggleClass('error_api');
+                if (!$('#api-value').hasClass('img_error'))
+                    $('#api-value').toggleClass('img_error');
+                container = document.getElementById('txt_shower').innerHTML = 'API key in empty!'
+            }
+        })
+        $('#reconf').on('click', function() {
+            if (API_KEY !== null) {
+                elements.api_value.value = API_KEY;
+            }
+            document.getElementById('txt_shower').innerHTML = '';
+            switchClass(elements.re_api, 'display-none', true)
+            switchClass(elements.api, 'display-none', false);
+            switchClass(elements.translator, 'display-none', true);
+            if (!$('#vanish_container').hasClass('display-none'))
+                $('#vanish_container').toggleClass('display-none');
+            $(elements.api_value).focus();
+        })
+        $(elements.api_value).focus(function(){
+            if(this.value !== this.defaultValue){
+                this.select();
+            }
+        });
+        setTimeout(function() {
+            $('#paste').click(function () {
+                if (!paste_done)
+                    return;
+                else
+                    paste_done = false;
+                Asc.scope.arr = translatedText;
+                window.Asc.plugin.info.recalculate = true;
+
+                window.Asc.plugin.executeMethod("GetVersion", [], function(version) {
+                    if (version === undefined) {
+                        window.Asc.plugin.executeMethod("PasteText", [$("#txt_shower")[0].innerText], function(result) {
+                            paste_done = true;
+                        });
+                    }
+                    else {
+                        window.Asc.plugin.executeMethod("GetSelectionType", [], function(sType) {
+                            switch (sType) {
+                                case "none":
+                                case "drawing":
+                                    window.Asc.plugin.executeMethod("PasteText", [$("#txt_shower")[0].innerText], function(result) {
+                                        paste_done = true;
+                                    });
+                                    break;
+                                case "text":
+                                    window.Asc.plugin.callCommand(function() {
+                                        Api.ReplaceTextSmart(Asc.scope.arr);
+                                    }, undefined, undefined, function(result) {
+                                        paste_done = true;
+                                    });
+                                    break;
+                            }
+                        });
+                    }
+                });
+            });
+        });
+
+        let info = localStorage.getItem(API_KEY_STORAGE_NAME);
+        if (info) {
+            try {
+                info = JSON.parse(info);
+                API_KEY = info.apiKey || "";
+                API_URL_CURRENT = info.apiUrl || API_URL_FREE;
+                if (API_KEY !== "") {
+                    elements.api_value.value = API_KEY;
+                }
+            } catch(e) {
+                API_KEY = "";
+                API_URL_CURRENT = API_URL_FREE;
+            }
+        }
+
+        if ("" !== API_KEY) {
+            switchClass(elements.api, 'display-none', true);
+            switchClass(elements.re_api, 'display-none', false);
+            switchClass(elements.translator, 'display-none', false);
+        }
+        else
+            API_KEY = "";
+
+        $('#show_manually').click(function() {
+            $(this).hide();
+            $('#hide_manually').show();
+            $('#enter_container').show();
+            updateScroll();
+        });
+        $('#hide_manually').click(function() {
+            $(this).hide();
+            $('#show_manually').show();
+            $('#enter_container').hide();
+            updateScroll();
+        });
+
+        var textShower = document.getElementById('txt_shower');
+        textShower.addEventListener('copy', function(event) {
+            const selection = document.getSelection();
+            event.clipboardData.setData('text/html', selection.toString());
+            event.clipboardData.setData('text/plain', selection.toString());
+            event.preventDefault();
+        });
+
+        function delay(callback, ms) {
+            var timer = 0;
+            return function() {
+                var context = this, args = arguments;
+                clearTimeout(timer);
+                timer = setTimeout(function () {
+                    callback.apply(context, args);
+                    }, ms || 0);
+            };
+        };
+
+        $('#enter_container').keyup(delay(function(e) {
+            txt = document.getElementById("enter_container").value;
+            if (sTextBeforeKeyUp == txt)
+                return;
+
+            if ("" == txt)
+                return;
+
+            RunTranslate(txt);
+            
+        }, 1000));
+    });
+
+    function updateScroll()
+    {
+        Ps && Ps.update();
+    };
+
+    window.Asc.plugin.button = function(id)
+    {
+        this.executeCommand("close", "");
+    };
+
+    function IsLastTransate(arrParas) {
+        if (arrParas.length !== translatedText.length)
+            return false;
+        for (var nPara = 0; nPara < arrParas.length; nPara++) {
+            if (arrParas[nPara] !== translatedText[nPara])
+                return false;
+        }
+        return true;
+    };
+
+    function processText(sTxt){
+        if (sTxt[sTxt.length - 1] === '\n')
+            sTxt = sTxt.slice(0, sTxt.length - 1);
+            
+        var splittedParas = sTxt.split('\n');
+        if (txt.trim() !== "")
+            document.getElementById("enter_container").value = sTxt;
+
+        return splittedParas;
+    };
+
+    function RunTranslate(sText) {
+        sTextBeforeKeyUp = sText;
+        var allParsedParas = processText(sText);
+        
+        DelInvalidChars(allParsedParas);
+        if (IsLastTransate(allParsedParas))
+            return false;
+
+        let source_text = "";
+        for (var nPara = 0; nPara < allParsedParas.length; nPara++) {
+            if (nPara !== 0)
+                source_text += "&";
+            source_text += "text=" + allParsedParas[nPara];
+        }
+        let target_lang = GetTargetLang();
+
+        document.getElementById('txt_shower').innerHTML = '';
+        translatedText = [];
+        Translate(target_lang, source_text);
+    };
+
+    window.Asc.plugin.onExternalMouseUp = function()
+    {
+        var evt = document.createEvent("MouseEvents");
+        evt.initMouseEvent("mouseup", true, true, window, 1, 0, 0, 0, 0,
+            false, false, false, false, 0, null);
+
+        document.dispatchEvent(evt);
+        $('#select_example').select2({
+            minimumResultsForSearch: Infinity,
+            width: "calc(100% - 24px)"
+        });
+    };
+    window.Asc.plugin.onTranslate = function()
+    {
+        function getMessage(key) {
+            return window.Asc.plugin.tr(key.trim());
+        };
+
+        var elements = document.getElementsByClassName("i18n");
+
+        for (var i = 0; i < elements.length; i++) {
+            var el = elements[i];
+            if (el.attributes["placeholder"]) el.attributes["placeholder"].value = getMessage(el.attributes["placeholder"].value);
+            if (el.innerText) el.innerText = getMessage(el.innerText);
+        }
+    };
+
+})(window, undefined);

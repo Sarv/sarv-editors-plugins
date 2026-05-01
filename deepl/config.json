@@ -1,0 +1,106 @@
+{
+	"name": "DeepL",
+	"nameLocale": {
+		"ru": "DeepL",
+		"fr": "DeepL",
+		"es": "DeepL",
+		"pt-BR": "DeepL",
+		"de": "DeepL",
+		"sq-AL": "DeepL",
+		"sr-Cyrl-RS": "DeepL",
+		"sr-Latn-RS": "DeepL",
+		"zh-ZH": "DeepL"
+	},
+	"guid": "asc.{b78a062b-e349-4634-8a44-99825600d299}",
+	"version": "1.0.5",
+
+	"variations": [
+		{
+			"description": "Translate the selected text into other languages using DeepL.",
+			"descriptionLocale": {
+				"ru": "Переводите текст на другие языки с помощью сервиса DeepL.",
+				"fr": "Traduisez un texte sélectionné dans d’autres langues avec DeepL.",
+				"es": "Traduzca el texto seleccionado a otros idiomas utilizando DeepL.",
+				"pt-BR": "Traduza o texto selecionado para outros idiomas usando DeepL.",
+				"de": "Übersetzen Sie den ausgewählten Text in andere Sprachen mit DeepL.",
+				"sq-AL": "Përktheni tekstin e selektuar në gjuhë të tjera duke përdorur DeepL.",
+				"sr-Cyrl-RS": "Преведите одабрани текст на друге језике користећи DeepL.",
+				"sr-Latn-RS": "Prevedite odabrani tekst na druge jezike koristeći DeepL.",
+				"zh-ZH": "使用 DeepL 将所选文本翻译成其他语言。"
+			},
+			"url": "index.html",
+			"icons": [ "resources/light/icon.png", "resources/light/icon@2x.png" ],
+			"icons2": [
+				{
+					"theme" : "flat",
+					"style" : "light",
+					
+					"100%": {
+						"normal": "resources/light/icon.png"
+					},
+					"125%": {
+						"normal": "resources/light/icon@1.25x.png"
+					},
+					"150%": {
+						"normal": "resources/light/icon@1.5x.png"
+					},
+					"175%": {
+						"normal": "resources/light/icon@1.75x.png"
+					},
+					"200%": {
+						"normal": "resources/light/icon@2x.png"
+					},
+					"default": {
+						"normal": "resources/light/icon.png"
+					}
+				},
+				{
+					"theme" : "flatDark",
+					"style" : "dark",
+					
+					"100%": {
+						"normal": "resources/dark/icon.png"
+					},
+					"125%": {
+						"normal": "resources/dark/icon@1.25x.png"
+					},
+					"150%": {
+						"normal": "resources/dark/icon@1.5x.png"
+					},
+					"175%": {
+						"normal": "resources/dark/icon@1.75x.png"
+					},
+					"200%": {
+						"normal": "resources/dark/icon@2x.png"
+					}
+				}
+			],
+			"isViewer": true,
+			"EditorsSupport": [ "word", "slide", "cell", "pdf" ],
+
+			"isVisual": true,
+			"isModal": false,
+			"isInsideMode": true,
+
+			"initDataType": "text",
+
+			"isUpdateOleOnResize": false,
+
+			"initOnSelectionChanged": true,
+			"store": {
+				"background": {
+					"light" : "#042B48",
+					"dark" : "#042B48"
+				},
+				"screenshots" : ["resources/store/screenshots/screen_1.png"],
+				"icons" : {
+					"light" : "resources/store/icons",
+					"dark"  : "resources/store/icons"
+				},
+				"categories": ["specAbilities", "work"]
+			}
+		}
+	],
+
+	"onlyofficeScheme": true
+}
