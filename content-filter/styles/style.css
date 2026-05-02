@@ -1,3 +1,8 @@
+/* Force .display-none to always win regardless of component display rules.
+   plugins.css defines it without !important; since our style.css loads after
+   it, any .tab-pane / .warning-bar etc. with display:flex would otherwise win. */
+.display-none { display: none !important; }
+
 html, body {
     min-height: 100%;
     height: 100%;

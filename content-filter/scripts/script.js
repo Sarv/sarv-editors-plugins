@@ -40,6 +40,7 @@
     var isScanRunning     = false;
     var isFirstInit       = true;
     var currentViolations = [];
+    var scanSafetyTimer   = null;   // resets isScanRunning if callCommand never completes
     var lastScanAt        = 0;
     var scanDebounce      = null;
     var countdownInterval = null;
@@ -318,16 +319,32 @@
         isScanRunning = true;
         lastScanAt    = Date.now();
         setScanIndicator(true);
-        window.Asc.scope       = window.Asc.scope || {};
+
+        // Safety net: if callCommand never fires onCommandCallback (e.g. a runtime
+        // error inside the document context), reset the flag after 10 s so future
+        // scans are not permanently blocked.
+        if (scanSafetyTimer) clearTimeout(scanSafetyTimer);
+        scanSafetyTimer = setTimeout(function () {
+            if (isScanRunning) {
+                isScanRunning = false;
+                setScanIndicator(false);
+            }
+        }, 10000);
+
+        window.Asc.scope = window.Asc.scope || {};
         runDocCmd(function () {
             var oDoc  = Api.GetDocument();
+            var nCount = oDoc.GetElementsCount();
             var parts = [];
-            for (var i = 0; i < oDoc.GetElementsCount(); i++) {
+            for (var i = 0; i < nCount; i++) {
                 var elem = oDoc.GetElement(i);
-                if (elem && typeof elem.GetText === 'function') parts.push(elem.GetText());
+                if (elem && typeof elem.GetText === 'function') {
+                    parts.push(elem.GetText());
+                }
             }
-            Asc.scope.cfScanText = parts.join(' ');
+            Asc.scope.cfScanText = parts.join('\n');
         }, function () {
+            if (scanSafetyTimer) { clearTimeout(scanSafetyTimer); scanSafetyTimer = null; }
             isScanRunning = false;
             setScanIndicator(false);
             updateViolationDisplay(scanText(window.Asc.scope.cfScanText || ''));
