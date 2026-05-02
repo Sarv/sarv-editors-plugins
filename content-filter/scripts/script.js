@@ -55,17 +55,12 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // callCommand callback queue
-    // Each runDocCmd(fn, cb) pushes cb; onCommandCallback pops it.
+    // callCommand wrapper
+    // Uses the 4-argument form: callCommand(fn, bSilent, bAsync, callback)
+    // This is the form used by all plugins in this repo (deepl, languagetool etc.)
     // ─────────────────────────────────────────────────────────
-    var cmdQueue = [];
-    window.Asc.plugin.onCommandCallback = function () {
-        var cb = cmdQueue.shift();
-        if (cb) cb();
-    };
     function runDocCmd(fn, cb) {
-        if (cb) cmdQueue.push(cb);
-        window.Asc.plugin.callCommand(fn, false);
+        window.Asc.plugin.callCommand(fn, undefined, undefined, cb || function () {});
     }
 
     // ─────────────────────────────────────────────────────────
@@ -328,9 +323,8 @@
         lastScanAt    = Date.now();
         setScanIndicator(true);
 
-        // Safety net: if callCommand never fires onCommandCallback (e.g. a runtime
-        // error inside the document context), reset the flag after 10 s so future
-        // scans are not permanently blocked.
+        // Safety net: if callCommand callback never fires (e.g. runtime error inside
+        // the document context), reset the flag after 10 s so scans aren't permanently blocked.
         if (scanSafetyTimer) clearTimeout(scanSafetyTimer);
         scanSafetyTimer = setTimeout(function () {
             if (isScanRunning) {
