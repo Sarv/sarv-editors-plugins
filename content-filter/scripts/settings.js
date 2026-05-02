@@ -29,7 +29,6 @@
     function populateForm() {
         var cfg = getConfig();
 
-        setVal('f-api-url',       cfg.apiUrl           || '');
         setVal('f-auto-remove',   cfg.autoRemoveDelay  !== undefined ? cfg.autoRemoveDelay : 0);
         setVal('f-scan-interval', cfg.scanIntervalMs   !== undefined ? cfg.scanIntervalMs  : 3000);
         setVal('f-cache-hours',   cfg.cacheTtlHours    || 24);
@@ -63,7 +62,6 @@
     function saveForm() {
         var cfg = getConfig();
 
-        cfg.apiUrl          = val('f-api-url');
         cfg.autoRemoveDelay = parseInt(val('f-auto-remove'),   10) || 0;
         cfg.scanIntervalMs  = parseInt(val('f-scan-interval'), 10) || 3000;
         cfg.cacheTtlHours   = parseInt(val('f-cache-hours'),   10) || 24;

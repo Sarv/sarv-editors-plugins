@@ -427,24 +427,6 @@ html, body {
     text-align: center;
 }
 
-/* ── Setup section ─────────────────────────────── */
-#no-config {
-    padding: 14px 12px;
-    overflow-y: auto;
-}
-
-.setup-title {
-    font-size: 13px;
-    font-weight: bold;
-    margin-bottom: 8px;
-}
-
-.setup-desc {
-    color: #666;
-    line-height: 1.6;
-    margin-bottom: 16px;
-}
-
 .field-label {
     display: block;
     margin-bottom: 4px;

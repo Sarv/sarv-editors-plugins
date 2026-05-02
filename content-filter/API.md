@@ -251,15 +251,22 @@ curl "http://localhost:3000/api/content-rules?size=2000&skip=0&since=2024-11-10T
 
 ---
 
-## Plugin Settings Reference
+## Plugin Configuration Reference
 
-Only these 4 values are user-configurable in Settings:
+### Deploy-time constant (set in `scripts/script.js`)
+
+| Constant | Description |
+|---|---|
+| `API_URL` | Your content-rules endpoint. Set this once before publishing the plugin. End users never see or change this value. |
+
+### User-configurable settings (Settings modal)
+
+End users can only adjust these 3 operational preferences:
 
 | Setting | Default | Description |
 |---|---|---|
-| **API URL** | *(required)* | `http://localhost:3000/api/content-rules` |
 | **Auto-Remove Delay** | `0` | Seconds before violations are auto-removed. `0` = disabled. |
 | **Scan Interval** | `3000` | Milliseconds between background scans in Word. |
 | **Cache Duration** | `24` | Hours before a full re-sync is triggered. |
 
-Everything else (page size, param names, field names, API key) is fixed in the plugin code.
+Everything else (API URL, page size, param names, field names, API key) is fixed in the plugin code and not exposed to users.

@@ -12,25 +12,8 @@
 <body>
 <div id="outer">
 
-    <!-- ── First-time setup ───────────────────────── -->
-    <div id="no-config" class="display-none">
-        <div class="setup-title i18n">Configure Content Filter</div>
-        <p class="setup-desc i18n">
-            Enter your API URL to load allowed and disallowed content rules.
-            Open Settings for auto-remove delay, scan interval, and cache options.
-        </p>
-        <div style="margin-bottom:14px;">
-            <label class="field-label i18n">API URL</label>
-            <input type="text" id="setup-url" class="form-control"
-                   placeholder="https://api.example.com/content-rules">
-        </div>
-        <button id="btn-setup-save" class="btn-text-default i18n" style="width:100%;">
-            Save &amp; Sync Rules
-        </button>
-    </div>
-
     <!-- ── Main panel ─────────────────────────────── -->
-    <div id="main-panel" class="display-none"
+    <div id="main-panel"
          style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
 
         <!-- Status bar -->

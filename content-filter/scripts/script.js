@@ -14,6 +14,14 @@
     'use strict';
 
     // ─────────────────────────────────────────────────────────
+    // DEPLOYMENT CONFIGURATION
+    // Set API_URL to your content-rules endpoint before publishing.
+    // This is an org-wide setting — end users never see or change it.
+    // The endpoint is secured by IP allowlisting on the server side.
+    // ─────────────────────────────────────────────────────────
+    var API_URL = 'https://mocki.io/v1/56b54966-e92f-45ec-8baa-cb00e0811d7e';
+
+    // ─────────────────────────────────────────────────────────
     // Constants  (nothing the user changes)
     // ─────────────────────────────────────────────────────────
     var CONFIG_KEY           = 'CONTENT_FILTER_CONFIG';
@@ -201,10 +209,10 @@
     //  3. If cache expired: full sync in background
     //  4. After rules are ready: auto-scan starts
     // ─────────────────────────────────────────────────────────
-    function doFullSync(apiUrl, onComplete) {
+    function doFullSync(onComplete) {
         isSyncing = true;
         updateStatusBar();
-        fetchAllRules(apiUrl, null)
+        fetchAllRules(API_URL, null)
             .then(function (result) {
                 rules     = result.rules;
                 isSyncing = false;
@@ -222,10 +230,10 @@
             });
     }
 
-    function doIncrementalSync(apiUrl, since) {
+    function doIncrementalSync(since) {
         isSyncing = true;
         updateStatusBar();
-        fetchAllRules(apiUrl, since)
+        fetchAllRules(API_URL, since)
             .then(function (result) {
                 var hasNew = (result.rules.allowed.length + result.rules.disallowed.length) > 0;
                 if (hasNew) mergeRules(result.rules);
@@ -249,7 +257,6 @@
 
     function syncRules(force, onComplete) {
         if (isSyncing) return;
-        var cfg   = getConfig();
         var entry = getCacheEntry();
 
         if (!force && entry && entry.rules) {
@@ -257,14 +264,14 @@
             updateStatusBar();
             updateTabBadges();
             if (isCacheValid()) {
-                if (entry.lastRecordDate) doIncrementalSync(cfg.apiUrl, entry.lastRecordDate);
+                if (entry.lastRecordDate) doIncrementalSync(entry.lastRecordDate);
                 if (onComplete) onComplete();
             } else {
-                doFullSync(cfg.apiUrl, onComplete);
+                doFullSync(onComplete);
             }
             return;
         }
-        doFullSync(cfg.apiUrl, onComplete);
+        doFullSync(onComplete);
     }
 
     // ─────────────────────────────────────────────────────────
@@ -480,9 +487,6 @@
         D.tabRemovedPane  = document.getElementById('tab-removed');
         D.listRemoved     = document.getElementById('list-removed');
         D.btnClearHistory = document.getElementById('btn-clear-history');
-        // Setup
-        D.setupUrl        = document.getElementById('setup-url');
-        D.btnSetupSave    = document.getElementById('btn-setup-save');
     }
 
     // ─────────────────────────────────────────────────────────
@@ -662,7 +666,7 @@
             stopCountdown();
             localStorage.removeItem(CACHE_KEY);
             rules = { allowed: [], disallowed: [] };
-            doFullSync(getConfig().apiUrl, function () { startAutoScan(); });
+            doFullSync(function () { startAutoScan(); });
         });
 
         D.btnRemoveAll.addEventListener('click', function () {
@@ -699,32 +703,22 @@
             stopCountdown();
             btn.disabled = true;
             btn.textContent = '\u2026';
+            // Capture category before filtering violations
+            var category = '';
+            for (var i = 0; i < currentViolations.length; i++) {
+                if (currentViolations[i].matched.toLowerCase() === word.toLowerCase()) {
+                    category = currentViolations[i].rule.category || '';
+                    break;
+                }
+            }
             removeWord(word, function () {
                 currentViolations = currentViolations.filter(function (v) {
                     return v.matched.toLowerCase() !== word.toLowerCase();
                 });
-                // Log as manual removal
-                addToRemovalHistory([{ text: word,
-                    category: (function () {
-                        for (var i = 0; i < currentViolations.length + 1; i++) { /* already filtered */ }
-                        return '';
-                    })() }], 'manual');
+                addToRemovalHistory([{ text: word, category: category }], 'manual');
                 updateViolationDisplay(currentViolations);
                 updateTabBadges();
             });
-        });
-
-        // Setup form
-        D.btnSetupSave.addEventListener('click', function () {
-            var apiUrl = D.setupUrl.value.trim();
-            if (!apiUrl) { D.setupUrl.classList.add('input-error'); return; }
-            D.setupUrl.classList.remove('input-error');
-            var cfg    = getConfig();
-            cfg.apiUrl = apiUrl;
-            localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-            D.noConfig.classList.add('display-none');
-            D.mainPanel.classList.remove('display-none');
-            doFullSync(apiUrl, function () { startAutoScan(); });
         });
     }
 
@@ -763,17 +757,8 @@
             initDom();
             bindEvents();
             setupBeforeUnload();
-
-            var cfg = getConfig();
-            if (!cfg.apiUrl) {
-                D.noConfig.classList.remove('display-none');
-                D.mainPanel.classList.add('display-none');
-            } else {
-                D.noConfig.classList.add('display-none');
-                D.mainPanel.classList.remove('display-none');
-                // Load from cache immediately; sync in background; then auto-scan
-                syncRules(false, function () { startAutoScan(); });
-            }
+            // API_URL is fixed — load from cache immediately, sync in background, then auto-scan
+            syncRules(false, function () { startAutoScan(); });
         } else {
             // Selection changed — debounce scan
             handleSelectionChange(selectedText || '');
