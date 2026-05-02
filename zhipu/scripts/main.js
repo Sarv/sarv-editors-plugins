@@ -438,7 +438,7 @@
     //         oShape.SetPosition(630000, 1357200);
     //         oContent = oShape.GetDocContent();
     //         oContent.RemoveAllElements();
-    //         addText(oShape, oContent, 'ONLYOFFICE', 176, false, 'center');
+    //         addText(oShape, oContent, ' Sarv Office ', 176, false, 'center');
     //         addText(oShape, oContent, 'stands for Peace', 132, false, 'center');
     //         oSlide.AddObject(oShape);
     //

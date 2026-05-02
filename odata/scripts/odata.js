@@ -9,7 +9,7 @@
         return window.AscSimpleRequest && window.AscSimpleRequest.createRequest;
     }
 
-    // Custom fetch using AscSimpleRequest (ONLYOFFICE SDK) to bypass CORS
+    // Custom fetch using AscSimpleRequest ( Sarv Office  SDK) to bypass CORS
     // Falls back to public CORS proxy for browser mode
     function odataFetch(url, options) {
         options = options || {};
@@ -546,7 +546,7 @@
         });
     }
 
-    // Insert data into ONLYOFFICE spreadsheet
+    // Insert data into Sarv Office spreadsheet
     function insertDataIntoSpreadsheet(allData) {
         var tableNames = Object.keys(allData);
 
@@ -591,7 +591,7 @@
             window.Asc.scope.tableData = dataArray;
             window.Asc.scope.tableName = tableName;
 
-            // Call ONLYOFFICE API to insert data
+            // Call Sarv Office API to insert data
             window.Asc.plugin.callCommand(function() {
                 var data = Asc.scope.tableData;
                 var tableName = Asc.scope.tableName;

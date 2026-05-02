@@ -1,18 +1,18 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2025
+ * (c) Copyright Sarv 2010-2025
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
  * version 3 as published by the Free Software Foundation. In accordance with
  * Section 7(a) of the GNU AGPL its Section 15 shall be amended to the effect
- * that Ascensio System SIA expressly excludes the warranty of non-infringement
+ * that Sarv expressly excludes the warranty of non-infringement
  * of any third-party rights.
  *
  * This program is distributed WITHOUT ANY WARRANTY; without even the implied
  * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR  PURPOSE. For
  * details, see the GNU AGPL at: http://www.gnu.org/licenses/agpl-3.0.html
  *
- * You can contact Ascensio System SIA at 20A-6 Ernesta Birznieka-Upish
+ * You can contact Sarv at 20A-6 Ernesta Birznieka-Upish
  * street, Riga, Latvia, EU, LV-1050.
  *
  * The  interactive user interfaces in modified source and object code versions
@@ -128,14 +128,14 @@ EditorHelperImpl.prototype.getToolsSystemPrompt = function() {
 	let ctx = this._getEditorContext();
 
 	let prompt = "\
-You are an AI assistant integrated into the OnlyOffice " + ctx.name + " editor.\n\
+You are an AI assistant integrated into the Sarv Office " + ctx.name + " editor.\n\
 You have access to tools that can interact with the " + ctx.name + " content.\n\
 \n\
 IMPORTANT RULES FOR DOCUMENT OPERATIONS:\n\
 \n\
 1. When the user asks about the " + ctx.name + " content or wants to perform an action on it, you MUST use the available tools.\n\
 2. First, check if there is a specialized tool that matches the request (e.g., textStyle, addChart, rewriteText, etc.).\n\
-3. If no specialized tool fits, use the \"writeMacro\" tool. It can execute any JavaScript code using the OnlyOffice " + ctx.apiName + ".\n\
+3. If no specialized tool fits, use the \"writeMacro\" tool. It can execute any JavaScript code using the Sarv Office " + ctx.apiName + ".\n\
 4. The \"writeMacro\" tool can also READ/GET data from the " + ctx.name + ". Make the last expression in the code be the value you want to retrieve — it will be returned as the tool result. Example: " + ctx.macroExample + "\n\
 5. If a \"writeMacro\" call returns an error, analyze the error message, fix the code, and retry. You may retry up to 5 times for a single macro request before giving up and informing the user.\n\
 6. If the user’s question is NOT about the " + ctx.name + " content (e.g., general knowledge, coding help, conversation), respond normally without calling any tools.\n\
@@ -153,12 +153,12 @@ EditorHelperImpl.prototype.getSystemPrompt = function() {
 	let ctx = this._getEditorContext();
 
 	let systemPrompt = "\
-You are an AI assistant integrated into the OnlyOffice " + ctx.name + " editor with function-calling capabilities.\n\
+You are an AI assistant integrated into the Sarv Office " + ctx.name + " editor with function-calling capabilities.\n\
 \n\
 BEHAVIOR RULES:\n\
 - When the user asks about the " + ctx.name + " content or wants to perform an action on it, you MUST call an appropriate function.\n\
 - First, check if there is a specialized function that matches the request.\n\
-- If no specialized function fits, use the \"writeMacro\" function. It can execute any JavaScript code using the OnlyOffice " + ctx.apiName + ".\n\
+- If no specialized function fits, use the \"writeMacro\" function. It can execute any JavaScript code using the Sarv Office " + ctx.apiName + ".\n\
 - The \"writeMacro\" function can also READ/GET data from the " + ctx.name + ". Make the last expression in the code be the value you want to retrieve — it will be returned as the function result. Example: " + ctx.macroExample + "\n\
 - If a \"writeMacro\" call returns an error, analyze the error message, fix the code, and retry. You may retry up to 5 times for a single macro request before giving up.\n\
 - If the user’s question is NOT about the " + ctx.name + " content (e.g., general knowledge, coding help, conversation), respond normally in text without calling any function.\n\

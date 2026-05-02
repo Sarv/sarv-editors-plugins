@@ -22,6 +22,20 @@ html, body {
     overflow: hidden;
 }
 
+/* ── Plugin description bar ───────────────────── */
+.plugin-desc-bar {
+    padding: 6px 12px;
+    border-bottom: 1px solid #e0e0e0;
+    background: #F5F7FF;
+    font-size: 10px;
+    color: #555;
+    line-height: 1.4;
+    flex-shrink: 0;
+}
+.plugin-desc-bar strong {
+    color: #2E5BBA;
+}
+
 /* ── Status bar ────────────────────────────────── */
 .status-bar {
     display: flex;

@@ -1,18 +1,18 @@
 /*
- * (c) Copyright Ascensio System SIA 2010-2025
+ * (c) Copyright Sarv 2010-2025
  *
  * This program is a free software product. You can redistribute it and/or
  * modify it under the terms of the GNU Affero General Public License (AGPL)
  * version 3 as published by the Free Software Foundation. In accordance with
  * Section 7(a) of the GNU AGPL its Section 15 shall be amended to the effect
- * that Ascensio System SIA expressly excludes the warranty of non-infringement
+ * that Sarv expressly excludes the warranty of non-infringement
  * of any third-party rights.
  *
  * This program is distributed WITHOUT ANY WARRANTY; without even the implied
  * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR  PURPOSE. For
  * details, see the GNU AGPL at: http://www.gnu.org/licenses/agpl-3.0.html
  *
- * You can contact Ascensio System SIA at 20A-6 Ernesta Birznieka-Upish
+ * You can contact Sarv at 20A-6 Ernesta Birznieka-Upish
  * street, Riga, Latvia, EU, LV-1050.
  *
  * The  interactive user interfaces in modified source and object code versions
@@ -33,7 +33,7 @@
 	let func = new RegisteredFunction({
 		"name": "writeMacro",
 		"text": "Run Macro",
-		"description": `Executes a JavaScript macro using the OnlyOffice Spreadsheet API.
+		"description": `Executes a JavaScript macro using the Sarv Office Spreadsheet API.
 Use this tool to perform any spreadsheet operation when no other specialized tool is available.
 This tool can also be used to READ/GET data from the spreadsheet — make the last expression in the script be the value you want to retrieve, and it will be returned as the tool result.
 For example, to get the value of cell A1, write: Api.GetActiveSheet().GetRange("A1").GetValue()
@@ -43,8 +43,8 @@ The return value of the last expression will be the tool's output.`,
 			"properties": {
 				"code": {
 					"type": "string",
-					"description": `Valid JavaScript code using the OnlyOffice Spreadsheet API to execute directly via eval. Rules:
-- Use only the OnlyOffice Spreadsheet API (Api, ApiWorksheet, ApiRange, etc.)
+					"description": `Valid JavaScript code using the Sarv Office Spreadsheet API to execute directly via eval. Rules:
+- Use only the Sarv Office Spreadsheet API (Api, ApiWorksheet, ApiRange, etc.)
 - Do NOT wrap the code in a function or IIFE — output only the statements to execute directly
 - Do NOT include any explanation, comments, or markdown — output raw JavaScript only
 - To GET/READ data: make the last expression the value you want to return (e.g. ws.GetRange("A1").GetValue())

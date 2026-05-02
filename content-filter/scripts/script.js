@@ -337,23 +337,22 @@
             }
         }, 10000);
 
-        window.Asc.scope = window.Asc.scope || {};
         runDocCmd(function () {
-            var oDoc  = Api.GetDocument();
+            var parts  = [];
+            var oDoc   = Api.GetDocument();
             var nCount = oDoc.GetElementsCount();
-            var parts = [];
             for (var i = 0; i < nCount; i++) {
                 var elem = oDoc.GetElement(i);
                 if (elem && typeof elem.GetText === 'function') {
                     parts.push(elem.GetText());
                 }
             }
-            Asc.scope.cfScanText = parts.join('\n');
-        }, function () {
+            return parts.join('\n');   // returned value is passed to the callback below
+        }, function (docText) {
             if (scanSafetyTimer) { clearTimeout(scanSafetyTimer); scanSafetyTimer = null; }
             isScanRunning = false;
             setScanIndicator(false);
-            updateViolationDisplay(scanText(window.Asc.scope.cfScanText || ''));
+            updateViolationDisplay(scanText(docText || ''));
         });
     }
 
@@ -382,19 +381,32 @@
 
     // ─────────────────────────────────────────────────────────
     // Remove violations
+    // Works in all editor types:
+    //   Word/PDF  → callCommand + Api.GetDocument().SearchAndReplace
+    //   Cell/Slide → executeMethod('SearchAndReplace', …)
     // ─────────────────────────────────────────────────────────
     function removeWord(word, callback) {
-        if (window.Asc.plugin.info.editorType !== 'word') { if (callback) callback(); return; }
-        window.Asc.scope       = window.Asc.scope || {};
-        window.Asc.scope.cfWord = word;
-        runDocCmd(function () {
-            Api.GetDocument().SearchAndReplace({
-                searchString: Asc.scope.cfWord,
+        if (isWordEditor()) {
+            // Word must be embedded via Asc.scope — closures aren't available
+            // inside callCommand because it is serialised as a string.
+            window.Asc.scope        = window.Asc.scope || {};
+            window.Asc.scope.cfWord = word;
+            runDocCmd(function () {
+                Api.GetDocument().SearchAndReplace({
+                    searchString:  Asc.scope.cfWord,
+                    replaceString: '',
+                    matchCase:     false,
+                    matchWord:     false
+                });
+            }, callback || function () {});
+        } else {
+            // Spreadsheet / presentation editors
+            window.Asc.plugin.executeMethod('SearchAndReplace', [{
+                searchString:  word,
                 replaceString: '',
-                matchCase: false,
-                matchWord: false
-            });
-        }, callback || function () {});
+                matchCase:     false
+            }], callback || function () {});
+        }
     }
 
     function getUniqueWords(violations) {
@@ -612,9 +624,8 @@
                     ? '<span class="v-cat">' + esc(v.rule.category) + '</span>' : '';
                 var escapedSnip = esc(v.snippet).replace(
                     new RegExp('(' + escRx(esc(v.matched)) + ')', 'gi'), '<mark>$1</mark>');
-                var removeBtn = (window.Asc.plugin.info.editorType === 'word')
-                    ? '<button class="btn-remove" data-word="' + esc(v.matched) + '">' +
-                          window.Asc.plugin.tr('Remove') + '</button>' : '';
+                var removeBtn = '<button class="btn-remove" data-word="' + esc(v.matched) + '">' +
+                    window.Asc.plugin.tr('Remove') + '</button>';
                 return '<div class="v-item">' +
                     '<div class="v-header"><span class="v-word">' + esc(v.matched) + '</span>' +
                     catHtml + removeBtn + '</div>' +

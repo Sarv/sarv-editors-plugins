@@ -12,7 +12,7 @@
 
   // 2) Theme change handler
   function onThemeChanged(theme) {
-    // Let OnlyOffice apply its base styling
+    // Let Sarv Office apply its base styling
     window.Asc.plugin.onThemeChangedBase(theme);
 
     // Toggle our dark-mode class
