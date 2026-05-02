@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Content Filter – About</title>
+    <link rel="stylesheet" href="https://sarv.github.io/sarv-editors-plugins/v1/plugins.css">
+    <link rel="stylesheet" href="styles/style.css">
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins.js"></script>
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins-ui.js"></script>
+    <script>
+        window.Asc.plugin.init = function () {};
+        window.Asc.plugin.button = function () {
+            window.Asc.plugin.executeCommand('close', '');
+        };
+        window.Asc.plugin.onThemeChanged = function (theme) {
+            window.Asc.plugin.onThemeChangedBase(theme);
+        };
+    </script>
+</head>
+<body>
+<div id="about-outer">
+    <div class="about-name i18n">Content Filter</div>
+    <div class="about-ver">v1.0.0</div>
+    <div class="about-desc i18n">
+        Scans documents for allowed and disallowed words and phrases
+        using rule lists fetched from a configurable API.
+    </div>
+</div>
+</body>
+</html>

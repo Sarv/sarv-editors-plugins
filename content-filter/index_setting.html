@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Content Filter – Settings</title>
+    <link rel="stylesheet" href="https://sarv.github.io/sarv-editors-plugins/v1/plugins.css">
+    <link rel="stylesheet" href="styles/style.css">
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins.js"></script>
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins-ui.js"></script>
+    <script src="scripts/settings.js"></script>
+</head>
+<body>
+<div id="settings-outer">
+
+    <!-- ── API Connection ──────────────────────── -->
+    <div class="settings-section">
+        <div class="settings-section-title i18n">API Connection</div>
+
+        <div class="field-group" style="margin-bottom:10px;">
+            <label class="field-label i18n">API URL</label>
+            <input type="text" id="f-api-url" class="form-control"
+                   placeholder="https://api.example.com/content-rules">
+            <div class="field-hint i18n">
+                Endpoint that returns allowed/disallowed content rules.
+                Security is handled by IP allowlisting on the server — no API key required.
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Behavior ──────────────────────────────── -->
+    <div class="settings-section">
+        <div class="settings-section-title i18n">Behavior</div>
+
+        <div class="settings-grid">
+            <div class="field-group">
+                <label class="field-label i18n">Auto-Remove Delay (seconds)</label>
+                <input type="number" id="f-auto-remove" class="form-control" min="0" max="300">
+                <div class="field-hint i18n">
+                    Countdown before violations are auto-removed. Set to 0 to disable auto-remove.
+                </div>
+            </div>
+            <div class="field-group">
+                <label class="field-label i18n">Scan Interval (ms)</label>
+                <input type="number" id="f-scan-interval" class="form-control" min="1000" max="30000">
+                <div class="field-hint i18n">
+                    How often Word documents are re-scanned in the background. Default: 3000.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Cache ───────────────────────────────── -->
+    <div class="settings-section">
+        <div class="settings-section-title i18n">Cache</div>
+
+        <div style="display:flex; align-items:flex-end; gap:14px; flex-wrap:wrap;">
+            <div class="field-group" style="flex:0 0 160px;">
+                <label class="field-label i18n">Cache Duration (hours)</label>
+                <input type="number" id="f-cache-hours" class="form-control" min="1" max="720">
+                <div class="field-hint i18n">Full re-sync after this many hours. Default: 24.</div>
+            </div>
+            <div class="settings-actions" style="margin-bottom:16px;">
+                <button id="btn-clear-cache" class="btn-text-default i18n">Clear Cache</button>
+            </div>
+        </div>
+        <div id="cache-info"></div>
+    </div>
+
+</div>
+</body>
+</html>

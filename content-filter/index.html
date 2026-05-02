@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Content Filter</title>
+    <link rel="stylesheet" href="https://sarv.github.io/sarv-editors-plugins/v1/plugins.css">
+    <link rel="stylesheet" href="styles/style.css">
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins.js"></script>
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins-ui.js"></script>
+    <script src="scripts/script.js"></script>
+</head>
+<body>
+<div id="outer">
+
+    <!-- ── First-time setup ───────────────────────── -->
+    <div id="no-config" class="display-none">
+        <div class="setup-title i18n">Configure Content Filter</div>
+        <p class="setup-desc i18n">
+            Enter your API URL to load allowed and disallowed content rules.
+            Open Settings for auto-remove delay, scan interval, and cache options.
+        </p>
+        <div style="margin-bottom:14px;">
+            <label class="field-label i18n">API URL</label>
+            <input type="text" id="setup-url" class="form-control"
+                   placeholder="https://api.example.com/content-rules">
+        </div>
+        <button id="btn-setup-save" class="btn-text-default i18n" style="width:100%;">
+            Save &amp; Sync Rules
+        </button>
+    </div>
+
+    <!-- ── Main panel ─────────────────────────────── -->
+    <div id="main-panel" class="display-none"
+         style="height:100%; display:flex; flex-direction:column; overflow:hidden;">
+
+        <!-- Status bar -->
+        <div class="status-bar">
+            <span id="sync-dot" class="sync-dot idle"></span>
+            <div class="status-text-wrap">
+                <div id="sync-status"></div>
+                <div id="last-sync"></div>
+            </div>
+            <button id="btn-refresh" class="btn-text-default" title="Refresh rules">&#8635;</button>
+        </div>
+
+        <!-- Violation warning bar (always visible when violations exist) -->
+        <div id="violation-warning" class="warning-bar display-none">
+            <span id="warning-text" class="warning-text"></span>
+            <button id="btn-remove-all" class="btn-remove-all i18n">Remove All</button>
+        </div>
+
+        <!-- Error banner (auto-hides after 6s) -->
+        <div id="error-msg" class="display-none"></div>
+
+        <!-- Tab bar -->
+        <div id="tab-bar" class="tab-bar">
+            <button class="tab-btn active" data-tab="violations">
+                <span class="i18n">Violations</span>
+                <span id="badge-viol" class="tab-badge display-none"></span>
+            </button>
+            <button class="tab-btn" data-tab="disallowed">
+                <span class="i18n">Disallowed</span>
+                <span id="badge-dis" class="tab-badge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="allowed">
+                <span class="i18n">Allowed</span>
+                <span id="badge-all" class="tab-badge">0</span>
+            </button>
+            <button class="tab-btn" data-tab="removed">
+                <span class="i18n">Removed</span>
+                <span id="badge-removed" class="tab-badge">0</span>
+            </button>
+        </div>
+
+        <!-- ── Violations pane ─────────────────────── -->
+        <div id="tab-violations" class="tab-pane">
+
+            <!-- Scanning indicator -->
+            <div id="scan-indicator" class="scan-indicator display-none">
+                <span class="scan-pulse-dot"></span>
+                <span class="i18n">Scanning&hellip;</span>
+            </div>
+
+            <!-- Auto-remove countdown banner -->
+            <div id="countdown-banner" class="countdown-banner display-none">
+                <span class="countdown-icon">&#9200;</span>
+                <div id="countdown-text" class="countdown-text"></div>
+                <div class="countdown-progress">
+                    <div id="countdown-bar" class="countdown-bar" style="width:100%;"></div>
+                </div>
+                <button id="btn-cancel-cd" class="btn-text-default i18n">Cancel</button>
+            </div>
+
+            <!-- "Removing…" status shown while async removal runs -->
+            <div id="removing-status" class="removing-status display-none i18n">
+                Removing violations&hellip;
+            </div>
+
+            <div id="result-summary" class="result-summary"></div>
+            <div id="results-list"></div>
+
+        </div><!-- /#tab-violations -->
+
+        <!-- ── Disallowed pane ─────────────────────── -->
+        <div id="tab-disallowed" class="tab-pane display-none">
+            <div class="search-row">
+                <input type="text" id="search-dis" class="form-control"
+                       placeholder="Search disallowed rules&hellip;">
+            </div>
+            <div id="list-dis" class="rule-list"></div>
+        </div>
+
+        <!-- ── Allowed pane ───────────────────────── -->
+        <div id="tab-allowed" class="tab-pane display-none">
+            <div class="search-row">
+                <input type="text" id="search-all" class="form-control"
+                       placeholder="Search allowed rules&hellip;">
+            </div>
+            <div id="list-all" class="rule-list"></div>
+        </div>
+
+        <!-- ── Removed history pane ───────────────── -->
+        <div id="tab-removed" class="tab-pane display-none">
+            <div class="history-toolbar">
+                <button id="btn-clear-history" class="btn-text-default i18n">Clear History</button>
+            </div>
+            <div id="list-removed" class="rule-list"></div>
+        </div>
+
+    </div><!-- /#main-panel -->
+
+</div><!-- /#outer -->
+</body>
+</html>

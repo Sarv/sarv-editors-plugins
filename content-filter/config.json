@@ -1,0 +1,130 @@
+{
+    "name": "Content Filter",
+    "nameLocale": {
+        "ru": "Фильтр контента",
+        "fr": "Filtre de contenu",
+        "es": "Filtro de contenido",
+        "de": "Inhaltsfilter",
+        "zh-ZH": "内容过滤器",
+        "pt-BR": "Filtro de conteúdo"
+    },
+    "guid": "asc.{A7F3D421-8C5B-4E9F-B2A6-1D8E7C3F5A90}",
+    "version": "1.1.0",
+    "variations": [
+        {
+            "description": "Scan documents for allowed and disallowed content using rule lists fetched from your API.",
+            "descriptionLocale": {
+                "ru": "Сканируйте документы на наличие разрешённого и запрещённого контента, используя списки правил из вашего API.",
+                "fr": "Analysez les documents pour détecter les contenus autorisés et interdits à l'aide de listes de règles issues de votre API.",
+                "es": "Analice documentos en busca de contenido permitido y no permitido usando listas de reglas obtenidas de su API.",
+                "de": "Scannen Sie Dokumente auf erlaubte und unerlaubte Inhalte mithilfe von Regellisten aus Ihrer API.",
+                "zh-ZH": "使用从 API 获取的规则列表扫描文档中的允许和禁止内容。",
+                "pt-BR": "Verifique documentos em busca de conteúdo permitido e proibido usando listas de regras obtidas da sua API."
+            },
+            "url": "index.html",
+            "icons": ["resources/light/icon.png", "resources/light/icon@2x.png"],
+            "icons2": [
+                {
+                    "theme": "flat",
+                    "style": "light",
+                    "100%": { "normal": "resources/light/icon.png" },
+                    "125%": { "normal": "resources/light/icon@1.25x.png" },
+                    "150%": { "normal": "resources/light/icon@1.5x.png" },
+                    "175%": { "normal": "resources/light/icon@1.75x.png" },
+                    "200%": { "normal": "resources/light/icon@2x.png" },
+                    "default": { "normal": "resources/light/icon.png" }
+                },
+                {
+                    "theme": "flatDark",
+                    "style": "dark",
+                    "100%": { "normal": "resources/dark/icon.png" },
+                    "125%": { "normal": "resources/dark/icon@1.25x.png" },
+                    "150%": { "normal": "resources/dark/icon@1.5x.png" },
+                    "175%": { "normal": "resources/dark/icon@1.75x.png" },
+                    "200%": { "normal": "resources/dark/icon@2x.png" },
+                    "default": { "normal": "resources/dark/icon.png" }
+                }
+            ],
+            "isViewer": true,
+            "EditorsSupport": ["word", "cell", "slide", "pdf"],
+            "isVisual": true,
+            "isModal": false,
+            "isInsideMode": true,
+            "initDataType": "text",
+            "initOnSelectionChanged": true,
+            "initData": "",
+            "isUpdateOleOnResize": false,
+            "store": {
+                "background": {
+                    "light": "#2E5BBA",
+                    "dark": "#2E5BBA"
+                },
+                "screenshots": ["resources/store/screenshots/screen_1.png"],
+                "icons": {
+                    "light": "resources/store/icons",
+                    "dark": "resources/store/icons"
+                },
+                "categories": ["specAbilities", "work"]
+            }
+        },
+        {
+            "description": "Settings",
+            "descriptionLocale": {
+                "ru": "Настройки",
+                "fr": "Paramètres",
+                "es": "Configuración",
+                "de": "Einstellungen",
+                "zh-ZH": "设置",
+                "pt-BR": "Configurações"
+            },
+            "url": "index_setting.html",
+            "isViewer": false,
+            "EditorsSupport": ["word", "cell", "slide", "pdf"],
+            "isVisual": true,
+            "isModal": true,
+            "isInsideMode": false,
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": false,
+            "buttons": [
+                {
+                    "text": "Ok",
+                    "textLocale": {
+                        "ru": "ОК", "fr": "Ok", "es": "Aceptar",
+                        "de": "Ok", "zh-ZH": "确定", "pt-BR": "Ok"
+                    },
+                    "primary": true
+                }
+            ],
+            "size": [420, 400]
+        },
+        {
+            "description": "About",
+            "descriptionLocale": {
+                "ru": "О программе",
+                "fr": "À propos",
+                "es": "Acerca de",
+                "de": "Über",
+                "zh-ZH": "关于",
+                "pt-BR": "Sobre"
+            },
+            "url": "index_about.html",
+            "isViewer": false,
+            "EditorsSupport": ["word", "cell", "slide", "pdf"],
+            "isVisual": true,
+            "isModal": true,
+            "isInsideMode": false,
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": false,
+            "buttons": [
+                {
+                    "text": "Ok",
+                    "primary": true
+                }
+            ],
+            "size": [400, 130]
+        }
+    ],
+    "onlyofficeScheme": true
+}
