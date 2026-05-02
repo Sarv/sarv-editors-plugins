@@ -449,9 +449,8 @@
     // DOM references
     // ─────────────────────────────────────────────────────────
     var D = {};
+    var isDomReady = false;
     function initDom() {
-        D.noConfig        = document.getElementById('no-config');
-        D.mainPanel       = document.getElementById('main-panel');
         D.syncDot         = document.getElementById('sync-dot');
         D.syncStatus      = document.getElementById('sync-status');
         D.lastSync        = document.getElementById('last-sync');
@@ -487,6 +486,7 @@
         D.tabRemovedPane  = document.getElementById('tab-removed');
         D.listRemoved     = document.getElementById('list-removed');
         D.btnClearHistory = document.getElementById('btn-clear-history');
+        isDomReady = true;
     }
 
     // ─────────────────────────────────────────────────────────
@@ -765,10 +765,14 @@
         }
     };
 
-    window.Asc.plugin.onTranslate = function () { updateStatusBar(); };
+    window.Asc.plugin.onTranslate = function () {
+        if (!isDomReady) return;
+        updateStatusBar();
+    };
 
     window.Asc.plugin.onThemeChanged = function (theme) {
         window.Asc.plugin.onThemeChangedBase(theme);
+        if (!isDomReady) return;
         var bg = (theme && theme['background-normal']) || '';
         document.querySelectorAll('.v-item, .rule-item, .history-item').forEach(function (el) {
             if (bg) el.style.background = bg;
