@@ -337,7 +337,13 @@ html, body {
     flex-shrink: 0;
 }
 
-/* ── Search row ────────────────────────────────── */
+/* ── Scan row (violations pane) ────────────────── */
+.scan-row {
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+/* ── Search row (disallowed/allowed panes) ─────── */
 .search-row {
     padding-bottom: 8px;
     flex-shrink: 0;

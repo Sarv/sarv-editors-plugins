@@ -35,16 +35,24 @@
     // ─────────────────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────────────────
-    var rules             = { allowed: [], disallowed: [] };
-    var isSyncing         = false;
-    var isScanRunning     = false;
-    var isFirstInit       = true;
-    var currentViolations = [];
-    var scanSafetyTimer   = null;   // resets isScanRunning if callCommand never completes
-    var lastScanAt        = 0;
-    var scanDebounce      = null;
-    var countdownInterval = null;
+    var rules              = { allowed: [], disallowed: [] };
+    var isSyncing          = false;
+    var isScanRunning      = false;
+    var isFirstInit        = true;
+    var currentViolations  = [];
+    var scanSafetyTimer    = null;   // resets isScanRunning if callCommand never completes
+    var lastScanAt         = 0;
+    var scanDebounce       = null;
+    var countdownInterval  = null;
     var scanIntervalHandle = null;
+    var lastSelectedText   = '';     // paragraph/selection text from last init() call
+
+    // True for editors where Api.GetDocument() works inside callCommand.
+    // Exclude cell/slide explicitly; treat 'word', 'pdf', and unknown as doc editors.
+    function isWordEditor() {
+        var t = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
+        return t !== 'cell' && t !== 'slide';
+    }
 
     // ─────────────────────────────────────────────────────────
     // callCommand callback queue
@@ -328,6 +336,10 @@
             if (isScanRunning) {
                 isScanRunning = false;
                 setScanIndicator(false);
+                // callCommand didn't complete — fall back to last known paragraph text
+                if (lastSelectedText) {
+                    updateViolationDisplay(scanText(lastSelectedText));
+                }
             }
         }, 10000);
 
@@ -357,9 +369,11 @@
     }
 
     function startAutoScan() {
-        if (window.Asc.plugin.info.editorType === 'word') {
-            triggerFullScan();
-            // Interval fallback: catches edits where cursor doesn't move
+        // Always attempt full scan — works in doc editors, protected by safety timer elsewhere
+        triggerFullScan();
+
+        // Interval fallback: catches edits where cursor doesn't move (doc editors only)
+        if (isWordEditor()) {
             var cfg      = getConfig();
             var interval = cfg.scanIntervalMs !== undefined ? cfg.scanIntervalMs : DEFAULT_SCAN_MS;
             if (interval > 0) {
@@ -370,7 +384,6 @@
                 }, interval);
             }
         }
-        // Cell/slide: scanning is driven by initOnSelectionChanged → handleSelectionChange
     }
 
     // ─────────────────────────────────────────────────────────
@@ -483,6 +496,7 @@
         D.badgeRemoved    = document.getElementById('badge-removed');
         // Violations pane
         D.tabViolPane     = document.getElementById('tab-violations');
+        D.btnScanDoc      = document.getElementById('btn-scan-doc');
         D.scanIndicator   = document.getElementById('scan-indicator');
         D.countdownBanner = document.getElementById('countdown-banner');
         D.countdownText   = document.getElementById('countdown-text');
@@ -686,6 +700,15 @@
             doFullSync(function () { startAutoScan(); });
         });
 
+        D.btnScanDoc.addEventListener('click', function () {
+            stopCountdown();
+            if (isWordEditor()) {
+                triggerFullScan();
+            } else if (lastSelectedText) {
+                triggerSelectedScan(lastSelectedText);
+            }
+        });
+
         D.btnRemoveAll.addEventListener('click', function () {
             stopCountdown();
             executeRemoval(currentViolations, 'manual');
@@ -754,15 +777,23 @@
     // Selection change handler  (called on every init after first)
     // ─────────────────────────────────────────────────────────
     function handleSelectionChange(selectedText) {
+        lastSelectedText = selectedText || '';
+
+        // ── Pass 1: immediate quick scan of the current paragraph/selection ──
+        // initDataType:"text" passes the paragraph at cursor position, so this
+        // gives instant feedback even before callCommand completes.
+        if (lastSelectedText) {
+            triggerSelectedScan(lastSelectedText);
+        }
+
+        // ── Pass 2: debounced full-document scan via callCommand ──
+        // Overrides pass-1 results with complete document coverage once ready.
         if (scanDebounce) clearTimeout(scanDebounce);
-        var delay = (window.Asc.plugin.info.editorType === 'word') ? 2000 : 600;
         scanDebounce = setTimeout(function () {
-            if (window.Asc.plugin.info.editorType === 'word') {
+            if (isWordEditor()) {
                 triggerFullScan();
-            } else {
-                triggerSelectedScan(selectedText);
             }
-        }, delay);
+        }, 1500);
     }
 
     // ─────────────────────────────────────────────────────────
