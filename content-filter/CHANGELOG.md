@@ -2,11 +2,25 @@
 
 ---
 
+## v1.2.0
+
+### Bug fixes
+- **Cell/Slide scan now covers the full document** — scanning in spreadsheets and presentations no longer requires selecting cells or pressing Ctrl+A first. The full document scan iterates all sheets and all slide shapes via the editor API, exactly like the Word scan does.
+- **Remove/Remove All now works in spreadsheets and presentations** — uses `executeMethod("SearchAndReplace")` for cell and slide editors; `callCommand` + `Api.GetDocument().SearchAndReplace` continues to be used for Word/PDF.
+- **Auto-remove countdown no longer resets on every cursor move** — `initOnSelectionChanged` fires on every cursor movement, which was calling `stopCountdown()` on each scan update and restarting the timer from the full delay. The countdown now only resets when violations are cleared to zero; it continues uninterrupted through subsequent scans.
+
+### Improvements
+- **Removal history scoped per document and editor type** — history is no longer a single global list shared across all files and editor types. Each entry carries a `docId` (`<editorType>:<filename>`), resolved on plugin open via `GetDocumentInfo`. The Removed tab shows only the current file's history; clearing history removes only the current file's entries.
+- **History cap changed to 50 per document** (was 500 total) — prevents any single document from polluting localStorage. A hard total cap of 500 entries across all documents is enforced as a safety limit.
+- **Scan interval fallback applies to all editor types** — previously the periodic re-scan interval was only active in Word. It now runs in spreadsheet and presentation editors too.
+
+---
+
 ## v1.1.0
 
 ### New features
 - **Tab-based UI** — panel now shows four tabs: Violations, Disallowed, Allowed, and Removed history.
-- **Removed history tab** — every word removed (auto or manual) is logged with word, category, timestamp, and source (`auto` / `manual`). History persists in localStorage (max 500 entries) and can be cleared from the tab.
+- **Removed history tab** — every word removed (auto or manual) is logged with word, category, timestamp, and source (`auto` / `manual`). History persists in localStorage and can be cleared from the tab.
 - **Fully automatic scanning** — no manual scan button required. Scanning is event-driven via `initOnSelectionChanged` on every cursor/selection change, with a 3-second interval fallback for Word to catch edits where the cursor doesn't move.
 - **Persistent violation warning bar** — a red banner is shown at the top of the panel whenever violations exist, with a "Remove All" button.
 - **Violation badge on tab** — the Violations tab shows a red count badge when disallowed content is found.

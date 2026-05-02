@@ -7,6 +7,53 @@ A collection of plugins for [Sarv Office](https://sarv.com) editors — document
 
 ---
 
+## Development
+
+### Local dev server
+
+Serve all plugins locally so changes reflect instantly — no push to GitHub needed.
+
+```bash
+node dev-server.js
+```
+
+In **Sarv Office → Plugin Manager**, set the index URL to:
+
+```
+http://localhost:30300/plugins-index.json
+```
+
+Close and reopen any plugin panel to pick up HTML/JS/CSS changes.
+
+---
+
+### Enabling / disabling plugins
+
+Each plugin controls its own availability via an optional `"enabled"` field in its `config.json`. No other file needs to change when you add or configure a plugin.
+
+| Value | Effect |
+|---|---|
+| absent or `true` | Enabled for all editors listed in `EditorsSupport` (default) |
+| `false` | Disabled — removed from the plugins index entirely |
+| `["word", "cell"]` | Enabled only for those editors — overrides `EditorsSupport` |
+
+**Examples:**
+
+```json
+// Enable for all editors (default — no field needed)
+{ "name": "My Plugin", ... }
+
+// Restrict to document and spreadsheet editors only
+{ "name": "My Plugin", "enabled": ["word", "cell"], ... }
+
+// Disable entirely
+{ "name": "My Plugin", "enabled": false, ... }
+```
+
+The dev server re-reads each plugin's `config.json` on every request, so changes take effect without restarting the server.
+
+---
+
 ## Plugins
 
 | Plugin | Description |

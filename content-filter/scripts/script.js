@@ -28,14 +28,16 @@
     var CACHE_KEY            = 'CONTENT_FILTER_CACHE';
     var REMOVAL_HISTORY_KEY  = 'CONTENT_FILTER_REMOVAL_HISTORY';
     var FIXED_PAGE_SIZE      = 2000;           // always 2000 per page
-    var MAX_HISTORY          = 500;            // max removal history entries
+    var MAX_HISTORY_PER_DOC  = 50;            // removal history kept per document
+    var MAX_HISTORY_TOTAL    = 500;           // hard cap across all documents in localStorage
     var DEFAULT_CACHE_HRS    = 24;
-    var DEFAULT_SCAN_MS      = 3000;           // interval fallback for Word
+    var DEFAULT_SCAN_MS      = 3000;
 
     // ─────────────────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────────────────
     var rules              = { allowed: [], disallowed: [] };
+    var currentDocId       = 'default';   // set async in init via GetDocumentInfo
     var isSyncing          = false;
     var isScanRunning      = false;
     var isFirstInit        = true;
@@ -47,8 +49,7 @@
     var scanIntervalHandle = null;
     var lastSelectedText   = '';     // paragraph/selection text from last init() call
 
-    // True for editors where Api.GetDocument() works inside callCommand.
-    // Exclude cell/slide explicitly; treat 'word', 'pdf', and unknown as doc editors.
+    // Used only by removeWord to pick the right removal API per editor type.
     function isWordEditor() {
         var t = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
         return t !== 'cell' && t !== 'slide';
@@ -97,23 +98,41 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // Removal history
+    // Removal history  (scoped per document + editor type)
+    //
+    // Each entry carries a docId so one localStorage key holds all
+    // documents without cross-contamination.
+    // Cap: 50 entries per document, 500 total across all documents.
     // ─────────────────────────────────────────────────────────
-    function getRemovalHistory() {
+    function getAllHistory() {
         try { return JSON.parse(localStorage.getItem(REMOVAL_HISTORY_KEY)) || []; }
         catch (e) { return []; }
     }
+    // Returns only entries for the currently open document.
+    function getRemovalHistory() {
+        return getAllHistory().filter(function (h) { return h.docId === currentDocId; });
+    }
     function addToRemovalHistory(wordsWithMeta, source) {
-        var history = getRemovalHistory();
+        var all = getAllHistory();
         var now = new Date().toISOString();
         wordsWithMeta.forEach(function (w) {
-            history.unshift({ word: w.text, category: w.category || '', removedAt: now, source: source });
+            all.unshift({ word: w.text, category: w.category || '', removedAt: now,
+                          source: source, docId: currentDocId });
         });
-        if (history.length > MAX_HISTORY) history.length = MAX_HISTORY;
-        localStorage.setItem(REMOVAL_HISTORY_KEY, JSON.stringify(history));
+        // Enforce per-doc cap of 50
+        var seen = {};
+        all = all.filter(function (h) {
+            seen[h.docId] = (seen[h.docId] || 0) + 1;
+            return seen[h.docId] <= MAX_HISTORY_PER_DOC;
+        });
+        // Hard total cap
+        if (all.length > MAX_HISTORY_TOTAL) all.length = MAX_HISTORY_TOTAL;
+        localStorage.setItem(REMOVAL_HISTORY_KEY, JSON.stringify(all));
     }
+    // Clears only the current document's history (leaves other docs intact).
     function clearRemovalHistory() {
-        localStorage.removeItem(REMOVAL_HISTORY_KEY);
+        var remaining = getAllHistory().filter(function (h) { return h.docId !== currentDocId; });
+        localStorage.setItem(REMOVAL_HISTORY_KEY, JSON.stringify(remaining));
     }
 
     // ─────────────────────────────────────────────────────────
@@ -315,45 +334,94 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // Auto-scan  (Word: callCommand; Cell/Slide: text from init)
+    // Auto-scan  — works for all editor types
     // ─────────────────────────────────────────────────────────
+    function onScanDone(docText) {
+        if (scanSafetyTimer) { clearTimeout(scanSafetyTimer); scanSafetyTimer = null; }
+        isScanRunning = false;
+        setScanIndicator(false);
+        updateViolationDisplay(scanText(docText || ''));
+    }
+
     function triggerFullScan() {
         if (isScanRunning) return;
         isScanRunning = true;
         lastScanAt    = Date.now();
         setScanIndicator(true);
 
-        // Safety net: if callCommand callback never fires (e.g. runtime error inside
-        // the document context), reset the flag after 10 s so scans aren't permanently blocked.
+        // Safety net: reset flag after 10 s if callCommand never completes
         if (scanSafetyTimer) clearTimeout(scanSafetyTimer);
         scanSafetyTimer = setTimeout(function () {
             if (isScanRunning) {
                 isScanRunning = false;
                 setScanIndicator(false);
-                // callCommand didn't complete — fall back to last known paragraph text
-                if (lastSelectedText) {
-                    updateViolationDisplay(scanText(lastSelectedText));
-                }
+                if (lastSelectedText) updateViolationDisplay(scanText(lastSelectedText));
             }
         }, 10000);
 
-        runDocCmd(function () {
-            var parts  = [];
-            var oDoc   = Api.GetDocument();
-            var nCount = oDoc.GetElementsCount();
-            for (var i = 0; i < nCount; i++) {
-                var elem = oDoc.GetElement(i);
-                if (elem && typeof elem.GetText === 'function') {
-                    parts.push(elem.GetText());
+        var et = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
+
+        if (et === 'cell') {
+            // ── Spreadsheet: collect all cell values across all sheets ──
+            runDocCmd(function () {
+                try {
+                    var wb = Api.GetDocument(), parts = [];
+                    var ns = wb.GetSheetsCount ? wb.GetSheetsCount() : 0;
+                    for (var s = 0; s < ns; s++) {
+                        var ws = wb.GetSheet(s);
+                        if (!ws) continue;
+                        var range = ws.GetUsedRange();
+                        if (!range) continue;
+                        var vals = range.GetValue();
+                        if (Array.isArray(vals)) {
+                            vals.forEach(function (row) {
+                                var cells = Array.isArray(row) ? row : [row];
+                                cells.forEach(function (v) {
+                                    if (v !== null && v !== undefined && v !== '') parts.push(String(v));
+                                });
+                            });
+                        }
+                    }
+                    return parts.join(' ');
+                } catch (e) { return ''; }
+            }, onScanDone);
+
+        } else if (et === 'slide') {
+            // ── Presentation: collect text from all shapes on all slides ──
+            runDocCmd(function () {
+                try {
+                    var pres = Api.GetPresentation(), parts = [];
+                    var ns = pres.GetSlidesCount ? pres.GetSlidesCount() : 0;
+                    for (var s = 0; s < ns; s++) {
+                        var slide = pres.GetSlide(s);
+                        var no = slide.GetObjectsCount ? slide.GetObjectsCount() : 0;
+                        for (var i = 0; i < no; i++) {
+                            var shape = slide.GetObject(i);
+                            if (!shape || typeof shape.GetDocContent !== 'function') continue;
+                            var doc = shape.GetDocContent();
+                            if (!doc) continue;
+                            var np = doc.GetElementsCount ? doc.GetElementsCount() : 0;
+                            for (var p = 0; p < np; p++) {
+                                var para = doc.GetElement(p);
+                                if (para && typeof para.GetText === 'function') parts.push(para.GetText());
+                            }
+                        }
+                    }
+                    return parts.join('\n');
+                } catch (e) { return ''; }
+            }, onScanDone);
+
+        } else {
+            // ── Word / PDF: iterate document paragraphs ──
+            runDocCmd(function () {
+                var parts = [], oDoc = Api.GetDocument(), n = oDoc.GetElementsCount();
+                for (var i = 0; i < n; i++) {
+                    var elem = oDoc.GetElement(i);
+                    if (elem && typeof elem.GetText === 'function') parts.push(elem.GetText());
                 }
-            }
-            return parts.join('\n');   // returned value is passed to the callback below
-        }, function (docText) {
-            if (scanSafetyTimer) { clearTimeout(scanSafetyTimer); scanSafetyTimer = null; }
-            isScanRunning = false;
-            setScanIndicator(false);
-            updateViolationDisplay(scanText(docText || ''));
-        });
+                return parts.join('\n');
+            }, onScanDone);
+        }
     }
 
     function triggerSelectedScan(text) {
@@ -362,20 +430,16 @@
     }
 
     function startAutoScan() {
-        // Always attempt full scan — works in doc editors, protected by safety timer elsewhere
         triggerFullScan();
-
-        // Interval fallback: catches edits where cursor doesn't move (doc editors only)
-        if (isWordEditor()) {
-            var cfg      = getConfig();
-            var interval = cfg.scanIntervalMs !== undefined ? cfg.scanIntervalMs : DEFAULT_SCAN_MS;
-            if (interval > 0) {
-                if (scanIntervalHandle) clearInterval(scanIntervalHandle);
-                scanIntervalHandle = setInterval(function () {
-                    if (!isScanRunning && (Date.now() - lastScanAt) > Math.max(interval - 500, 1500))
-                        triggerFullScan();
-                }, interval);
-            }
+        // Interval fallback: catches edits where cursor doesn't move
+        var cfg      = getConfig();
+        var interval = cfg.scanIntervalMs !== undefined ? cfg.scanIntervalMs : DEFAULT_SCAN_MS;
+        if (interval > 0) {
+            if (scanIntervalHandle) clearInterval(scanIntervalHandle);
+            scanIntervalHandle = setInterval(function () {
+                if (!isScanRunning && (Date.now() - lastScanAt) > Math.max(interval - 500, 1500))
+                    triggerFullScan();
+            }, interval);
         }
     }
 
@@ -590,7 +654,12 @@
 
     function updateViolationDisplay(violations) {
         currentViolations = violations;
-        stopCountdown();
+
+        // Only stop the countdown when violations are gone.
+        // Do NOT stop it on every scan update — initOnSelectionChanged fires on
+        // every cursor move, so unconditionally stopping here caused the countdown
+        // to reset to the full delay on each keystroke/cursor move.
+        if (violations.length === 0) stopCountdown();
 
         var count = violations.length;
         D.badgeViol.textContent = count || '';
@@ -632,7 +701,8 @@
                     '<div class="v-snippet">' + escapedSnip + '</div></div>';
             }).join('');
 
-            startCountdown(violations);
+            // Only start a fresh countdown if one isn't already ticking.
+            if (!countdownInterval) startCountdown(violations);
         }
     }
 
@@ -707,11 +777,7 @@
 
         D.btnScanDoc.addEventListener('click', function () {
             stopCountdown();
-            if (isWordEditor()) {
-                triggerFullScan();
-            } else if (lastSelectedText) {
-                triggerSelectedScan(lastSelectedText);
-            }
+            triggerFullScan();
         });
 
         D.btnRemoveAll.addEventListener('click', function () {
@@ -779,6 +845,29 @@
     }
 
     // ─────────────────────────────────────────────────────────
+    // Document identity
+    // Builds a stable key  "<editorType>:<sanitised-title>"  so history
+    // is stored per file+product combination.
+    // GetDocumentInfo is async; everything that uses currentDocId must
+    // run inside the callback (startAutoScan, updateTabBadges etc.)
+    // ─────────────────────────────────────────────────────────
+    function initDocId(callback) {
+        var et = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || 'doc';
+        try {
+            window.Asc.plugin.executeMethod('GetDocumentInfo', null, function (info) {
+                var title = (info && (info.title || info.fileName || info.name)) || '';
+                // Keep only safe chars, max 48 chars so the key stays readable
+                var slug  = title.toLowerCase().replace(/[^a-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
+                currentDocId = et + ':' + (slug || 'default');
+                callback();
+            });
+        } catch (e) {
+            currentDocId = et + ':default';
+            callback();
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────
     // Selection change handler  (called on every init after first)
     // ─────────────────────────────────────────────────────────
     function handleSelectionChange(selectedText) {
@@ -794,11 +883,7 @@
         // ── Pass 2: debounced full-document scan via callCommand ──
         // Overrides pass-1 results with complete document coverage once ready.
         if (scanDebounce) clearTimeout(scanDebounce);
-        scanDebounce = setTimeout(function () {
-            if (isWordEditor()) {
-                triggerFullScan();
-            }
-        }, 1500);
+        scanDebounce = setTimeout(triggerFullScan, 1500);
     }
 
     // ─────────────────────────────────────────────────────────
@@ -810,8 +895,11 @@
             initDom();
             bindEvents();
             setupBeforeUnload();
-            // API_URL is fixed — load from cache immediately, sync in background, then auto-scan
-            syncRules(false, function () { startAutoScan(); });
+            // Resolve document identity first so history is correctly scoped,
+            // then load rules and start scanning.
+            initDocId(function () {
+                syncRules(false, function () { startAutoScan(); });
+            });
         } else {
             // Selection changed — debounce scan
             handleSelectionChange(selectedText || '');

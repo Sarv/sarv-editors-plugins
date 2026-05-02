@@ -1,5 +1,6 @@
 {
     "name": "Content Filter",
+    "enabled": true,
     "nameLocale": {
         "ru": "Фильтр контента",
         "fr": "Filtre de contenu",
