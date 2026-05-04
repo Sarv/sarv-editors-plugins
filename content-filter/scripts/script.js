@@ -1,25 +1,29 @@
 /*
- * Content Filter Plugin — main script  v1.1.0
+ * Content Filter Plugin — main script  v1.2.0
  *
  * Auto-scans documents for disallowed/allowed content.
  * - Event-driven: fires on every selection change (initOnSelectionChanged)
- * - Interval fallback for Word (catches edits without cursor moves)
- * - API params are fixed: userId, size=2000, skip, since
+ * - Interval fallback for all editor types (catches edits without cursor moves)
+ * - API: POST to Sarv Drive content-policy endpoint; headers are deploy-time constants
  * - Incremental sync: stores lastRecordDate, only fetches new records on reload
  * - Tabs: Violations | Disallowed | Allowed | Removed history
  * - Countdown auto-remove + per-violation Remove button
  * - beforeunload warning when violations exist
+ * - Removal history scoped per document + editor type (50 entries per doc)
  */
 (function () {
     'use strict';
 
     // ─────────────────────────────────────────────────────────
     // DEPLOYMENT CONFIGURATION
-    // Set API_URL to your content-rules endpoint before publishing.
-    // This is an org-wide setting — end users never see or change it.
-    // The endpoint is secured by IP allowlisting on the server side.
+    // Set these values once before publishing. All are org-wide —
+    // end users never see or change them.
     // ─────────────────────────────────────────────────────────
-    var API_URL = 'https://mocki.io/v1/56b54966-e92f-45ec-8baa-cb00e0811d7e';
+    var API_ENDPOINT       = 'https://dev-console.sarv.com/drive-api/v1/external/get-content-policy';
+    var API_SESSION_TOKEN  = '940aeaa25fa9fbb1d79637ac96294394dbe3c87b5cc4d08273c8e95000a8af0e7197f834e2b2f16cb8e15f3614fab2728572';
+    var API_BEARER_TOKEN   = 'your_token_here';   // replace with actual Bearer token
+    var API_ACTIVE_ACCOUNT = '0';
+    var API_ORG_ID         = '';                  // leave empty to infer from Session-Token
 
     // ─────────────────────────────────────────────────────────
     // Constants  (nothing the user changes)
@@ -27,7 +31,6 @@
     var CONFIG_KEY           = 'CONTENT_FILTER_CONFIG';
     var CACHE_KEY            = 'CONTENT_FILTER_CACHE';
     var REMOVAL_HISTORY_KEY  = 'CONTENT_FILTER_REMOVAL_HISTORY';
-    var FIXED_PAGE_SIZE      = 2000;           // always 2000 per page
     var MAX_HISTORY_PER_DOC  = 50;            // removal history kept per document
     var MAX_HISTORY_TOTAL    = 500;           // hard cap across all documents in localStorage
     var DEFAULT_CACHE_HRS    = 24;
@@ -136,73 +139,74 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // API fetch — params are FIXED (not user-configurable)
-    //   ?userId=…  &size=2000  &skip=…  [&since=ISO]
-    // Security is enforced by IP allowlist on the server side.
+    // API fetch — POST to Sarv Drive content-policy endpoint
+    //
+    // Request body:
+    //   { organization_id, [since], [userId] }
+    //
+    // Headers (all deploy-time constants above):
+    //   Session-Token, active-account, Authorization, Content-Type
+    //
+    // Returns Promise<{ rules:{allowed,disallowed}, lastRecordDate:string|null }>
     // ─────────────────────────────────────────────────────────
-    function fetchPage(apiUrl, skip, since) {
-        var url = new URL(apiUrl);
-        url.searchParams.set('size', FIXED_PAGE_SIZE);
-        url.searchParams.set('skip', skip);
-        // Pass the current user so the server can return user-specific rules
-        var userId = (window.Asc.plugin.info && window.Asc.plugin.info.userId) || '';
-        if (userId) url.searchParams.set('userId', userId);
-        if (since)  url.searchParams.set('since',  since);
-
-        return fetch(url.toString())
-            .then(function (res) {
-                if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
-                return res.json();
-            });
-    }
-
     function normalizeRecord(raw) {
-        var text = String(raw.text || '').trim();
+        // Accept both camelCase and snake_case field names from the API
+        var text = String(raw.text || raw.word || raw.phrase || raw.term || '').trim();
         if (!text) return null;
         return {
             text:     text,
             lower:    text.toLowerCase(),
-            type:     String(raw.type || 'disallowed').toLowerCase(),
-            category: String(raw.category || ''),
-            date:     String(raw.updatedAt || '')
+            type:     String(raw.type || raw.policy_type || 'disallowed').toLowerCase(),
+            category: String(raw.category || raw.group || ''),
+            date:     String(raw.updatedAt || raw.updated_at || raw.modifiedAt || '')
         };
     }
 
-    // Returns Promise<{ rules:{allowed,disallowed}, lastRecordDate:string|null }>
-    function fetchAllRules(apiUrl, since) {
-        var skip     = 0;
-        var collected = [];
-        var maxDate  = null;
+    function fetchAllRules(since) {
+        var payload = { organization_id: API_ORG_ID };
+        if (since) payload.since = since;
+        var userId = (window.Asc.plugin.info && window.Asc.plugin.info.userId) || '';
+        if (userId) payload.userId = userId;
 
-        function nextPage() {
-            return fetchPage(apiUrl, skip, since).then(function (data) {
-                var records = Array.isArray(data) ? data : (data.data || []);
-                records.forEach(function (raw) {
-                    var norm = normalizeRecord(raw);
-                    if (!norm) return;
-                    collected.push(norm);
-                    if (norm.date) {
-                        try {
-                            var d = new Date(norm.date);
-                            if (!isNaN(d.getTime()) && (!maxDate || d > new Date(maxDate)))
-                                maxDate = norm.date;
-                        } catch (_) {}
-                    }
-                });
-                if (records.length >= FIXED_PAGE_SIZE) {
-                    skip += FIXED_PAGE_SIZE;
-                    return nextPage();
+        return fetch(API_ENDPOINT, {
+            method:  'POST',
+            headers: {
+                'Content-Type':   'application/json',
+                'Session-Token':  API_SESSION_TOKEN,
+                'active-account': API_ACTIVE_ACCOUNT,
+                'Authorization':  'Bearer ' + API_BEARER_TOKEN
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(function (res) {
+            if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
+            return res.json();
+        })
+        .then(function (data) {
+            // Accept: flat array, { data:[…] }, { policies:[…] }, { rules:[…] }
+            var records = Array.isArray(data) ? data
+                : (data.data || data.policies || data.rules || []);
+            var collected = [], maxDate = null;
+            records.forEach(function (raw) {
+                var norm = normalizeRecord(raw);
+                if (!norm) return;
+                collected.push(norm);
+                if (norm.date) {
+                    try {
+                        var d = new Date(norm.date);
+                        if (!isNaN(d.getTime()) && (!maxDate || d > new Date(maxDate)))
+                            maxDate = norm.date;
+                    } catch (_) {}
                 }
-                return {
-                    rules: {
-                        allowed:    collected.filter(function (r) { return r.type === 'allowed'; }),
-                        disallowed: collected.filter(function (r) { return r.type !== 'allowed'; })
-                    },
-                    lastRecordDate: maxDate
-                };
             });
-        }
-        return nextPage();
+            return {
+                rules: {
+                    allowed:    collected.filter(function (r) { return r.type === 'allowed'; }),
+                    disallowed: collected.filter(function (r) { return r.type !== 'allowed'; })
+                },
+                lastRecordDate: maxDate
+            };
+        });
     }
 
     // ─────────────────────────────────────────────────────────
@@ -235,7 +239,7 @@
     function doFullSync(onComplete) {
         isSyncing = true;
         updateStatusBar();
-        fetchAllRules(API_URL, null)
+        fetchAllRules(null)
             .then(function (result) {
                 rules     = result.rules;
                 isSyncing = false;
@@ -256,7 +260,7 @@
     function doIncrementalSync(since) {
         isSyncing = true;
         updateStatusBar();
-        fetchAllRules(API_URL, since)
+        fetchAllRules(since)
             .then(function (result) {
                 var hasNew = (result.rules.allowed.length + result.rules.disallowed.length) > 0;
                 if (hasNew) mergeRules(result.rules);
