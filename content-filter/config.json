@@ -13,60 +13,66 @@
     "version": "1.1.0",
     "variations": [
         {
-            "description": "Scan documents for allowed and disallowed content using rule lists fetched from your API.",
-            "descriptionLocale": {
-                "ru": "Сканируйте документы на наличие разрешённого и запрещённого контента, используя списки правил из вашего API.",
-                "fr": "Analysez les documents pour détecter les contenus autorisés et interdits à l'aide de listes de règles issues de votre API.",
-                "es": "Analice documentos en busca de contenido permitido y no permitido usando listas de reglas obtenidas de su API.",
-                "de": "Scannen Sie Dokumente auf erlaubte und unerlaubte Inhalte mithilfe von Regellisten aus Ihrer API.",
-                "zh-ZH": "使用从 API 获取的规则列表扫描文档中的允许和禁止内容。",
-                "pt-BR": "Verifique documentos em busca de conteúdo permitido e proibido usando listas de regras obtidas da sua API."
+          "description": "Scan documents for allowed and disallowed content using rule lists fetched from your API.",
+          "descriptionLocale": {
+            "ru": "Сканируйте документы на наличие разрешённого и запрещённого контента, используя списки правил из вашего API.",
+            "fr": "Analysez les documents pour détecter les contenus autorisés et interdits à l'aide de listes de règles issues de votre API.",
+            "es": "Analice documentos en busca de contenido permitido y no permitido usando listas de reglas obtenidas de su API.",
+            "de": "Scannen Sie Dokumente auf erlaubte und unerlaubte Inhalte mithilfe von Regellisten aus Ihrer API.",
+            "zh-ZH": "使用从 API 获取的规则列表扫描文档中的允许和禁止内容。",
+            "pt-BR": "Verifique documentos em busca de conteúdo permitido e proibido usando listas de regras obtidas da sua API."
+          },
+          "url": "index.html",
+          "icons": ["resources/light/icon.png", "resources/light/icon@2x.png"],
+          "icons2": [
+            {
+              "theme": "flat",
+              "style": "light",
+              "100%": { "normal": "resources/light/icon.png" },
+              "125%": { "normal": "resources/light/icon@1.25x.png" },
+              "150%": { "normal": "resources/light/icon@1.5x.png" },
+              "175%": { "normal": "resources/light/icon@1.75x.png" },
+              "200%": { "normal": "resources/light/icon@2x.png" },
+              "default": { "normal": "resources/light/icon.png" }
             },
-            "url": "index.html",
-            "icons": ["resources/light/icon.png", "resources/light/icon@2x.png"],
-            "icons2": [
-                {
-                    "theme": "flat",
-                    "style": "light",
-                    "100%": { "normal": "resources/light/icon.png" },
-                    "125%": { "normal": "resources/light/icon@1.25x.png" },
-                    "150%": { "normal": "resources/light/icon@1.5x.png" },
-                    "175%": { "normal": "resources/light/icon@1.75x.png" },
-                    "200%": { "normal": "resources/light/icon@2x.png" },
-                    "default": { "normal": "resources/light/icon.png" }
-                },
-                {
-                    "theme": "flatDark",
-                    "style": "dark",
-                    "100%": { "normal": "resources/dark/icon.png" },
-                    "125%": { "normal": "resources/dark/icon@1.25x.png" },
-                    "150%": { "normal": "resources/dark/icon@1.5x.png" },
-                    "175%": { "normal": "resources/dark/icon@1.75x.png" },
-                    "200%": { "normal": "resources/dark/icon@2x.png" },
-                    "default": { "normal": "resources/dark/icon.png" }
-                }
-            ],
-            "isViewer": true,
-            "EditorsSupport": ["word", "cell", "slide", "pdf"],
-            "isVisual": true,
-            "isModal": false,
-            "isInsideMode": true,
-            "initDataType": "text",
-            "initOnSelectionChanged": true,
-            "initData": "",
-            "isUpdateOleOnResize": false,
-            "store": {
-                "background": {
-                    "light": "#2E5BBA",
-                    "dark": "#2E5BBA"
-                },
-                "screenshots": ["resources/store/screenshots/screen_1.png"],
-                "icons": {
-                    "light": "resources/store/icons",
-                    "dark": "resources/store/icons"
-                },
-                "categories": ["specAbilities", "work"]
+            {
+              "theme": "flatDark",
+              "style": "dark",
+              "100%": { "normal": "resources/dark/icon.png" },
+              "125%": { "normal": "resources/dark/icon@1.25x.png" },
+              "150%": { "normal": "resources/dark/icon@1.5x.png" },
+              "175%": { "normal": "resources/dark/icon@1.75x.png" },
+              "200%": { "normal": "resources/dark/icon@2x.png" },
+              "default": { "normal": "resources/dark/icon.png" }
             }
+          ],
+          "isViewer": true,
+          "EditorsSupport": ["word", "cell", "slide", "pdf"],
+          "isVisual": true,
+          "isModal": false,
+          "isInsideMode": true,
+          "initDataType": "text",
+          "initOnSelectionChanged": true,
+          "initData": "",
+          "isUpdateOleOnResize": false,
+          "store": {
+            "background": {
+              "light": "#2E5BBA",
+              "dark": "#2E5BBA"
+            },
+            "screenshots": [
+              "resources/store/screenshots/screen_1.png",
+              "resources/store/screenshots/screen_2.png",
+              "resources/store/screenshots/screen_3.png",
+              "resources/store/screenshots/screen_4.png",
+              "resources/store/screenshots/screen_5.png"
+            ],
+            "icons": {
+              "light": "resources/store/icons",
+              "dark": "resources/store/icons"
+            },
+            "categories": ["specAbilities", "work"]
+          }
         },
         {
             "description": "Settings",
