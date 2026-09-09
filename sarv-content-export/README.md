@@ -255,7 +255,9 @@ editor that never fetches the plugin at all.
 
 ### Can the end user turn it off?
 
-No, and that is deliberate for a system plugin:
+Not any more - but stock 9.4 let them, and the fix lives in the editor, not here.
+
+Nothing in the *editor's* own UI ever offered it:
 
 - It is not in the plugin list (`controller/Plugins.js:892`, `!isSystem`), so there is
   nothing to remove there.
@@ -263,10 +265,32 @@ No, and that is deliberate for a system plugin:
   on `pluginVisible`, which a system plugin is not. Even for plugins that do appear there,
   the switcher is built `value: !!model.isSystem, disabled: !!model.isSystem`
   (`:318-319`): on and greyed out.
-- The only off switch is the integrator's. `editorConfig.plugins.disable` is an array of
-  guids that `controller/Plugins.js:123-126` forwards to `api.setPluginsDisabled`, and
-  `sdkjs/common/plugins.js:965` makes `run()` a no-op for anything in it. Or simply do not
-  send the `plugins` block for that client.
+
+The **Plugin Manager** was the hole. `pluginMethod_GetInstalledPlugins`
+(`sdkjs/common/apiBase_plugins.js`) computes `canRemoved` from a `protectedPlugins` array
+that upstream only fills in the **desktop** build, so in a browser it is always empty and
+every card - system plugins included - got a **Remove** button, in both the *Available
+plugins* and *Marketplace* tabs. Pressing it ran `RemovePlugin` -> `unregister` and wrote
+the guid into `asc_plugins_removed` in the editor origin's `localStorage`, which
+`checkInstalledPlugins` re-applies on every load. Verified: the button vanished and the
+plugin stayed gone across a reload.
+
+Patched in `sdkjs/common/apiBase_plugins.js` (see `UPSTREAM_GUIDE.md` 8a-8), for **every**
+system plugin rather than this guid:
+
+1. `canRemoved` is false when `isSystem()` - no Remove button.
+2. `RemovePlugin` refuses a system guid outright, since any plugin can call the method.
+3. `checkInstalledPlugins` drops a system guid from `asc_plugins_removed` instead of
+   honouring it, so a browser that already removed one recovers by itself.
+4. `GetInstalledPlugins` also reports `isSystem`, and the store renders a **SYSTEM** tag in
+   the button's place - on the card in both tabs and in the detail view - so the card says
+   why there is nothing to press instead of just leaving a gap.
+
+Ordinary plugins are untouched and stay removable. The only off switch left is the
+integrator's: `editorConfig.plugins.disable` (an array of guids that
+`controller/Plugins.js:123-126` forwards to `api.setPluginsDisabled`, after which
+`sdkjs/common/plugins.js:965` makes `run()` a no-op), or simply not sending the `plugins`
+block for that client.
 
 What the user *does* see is the **Content Export** button in the Plugins tab, always.
 
