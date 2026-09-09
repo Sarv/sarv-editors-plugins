@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Sarv Content Export - Settings</title>
+    <link rel="stylesheet" href="../v1/plugins.css">
+    <script type="text/javascript" src="../v1/plugins.js"></script>
+    <style>
+        html, body { height: 100%; margin: 0; padding: 0; }
+        body {
+            font: 12px/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif;
+            display: flex; flex-direction: column;
+            box-sizing: border-box;
+        }
+
+        /* Tabs. Only the active panel scrolls, so the tab strip stays put while the
+           integration guide - which is much taller than the window - is read. */
+        .tabs {
+            display: flex; flex: none;
+            border-bottom: 1px solid rgba(0, 0, 0, .12);
+            padding: 0 16px;
+        }
+        .tab {
+            appearance: none; background: none; border: 0;
+            padding: 10px 2px; margin-right: 20px;
+            font: inherit; color: inherit; cursor: pointer;
+            border-bottom: 2px solid transparent;
+            opacity: .6;
+        }
+        .tab[aria-selected="true"] { opacity: 1; font-weight: 600; border-bottom-color: #446995; }
+
+        .panel { flex: 1 1 auto; overflow-y: auto; padding: 14px 16px; }
+        .panel[hidden] { display: none; }
+
+        .section { margin-bottom: 18px; }
+        .section-title {
+            font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
+            font-size: 11px; opacity: .65; margin-bottom: 8px;
+        }
+        .choice { display: block; margin-bottom: 8px; cursor: pointer; }
+        .choice input { margin-right: 8px; vertical-align: -1px; }
+        .choice .hint { display: block; margin-left: 22px; opacity: .6; font-size: 11px; }
+
+        /* Integration guide */
+        .lead { margin: 0 0 16px; opacity: .75; }
+        .step { margin-bottom: 18px; }
+        .step h3 {
+            margin: 0 0 6px; font-size: 12px; font-weight: 600;
+        }
+        .step h3 .num {
+            display: inline-block; width: 17px; height: 17px; margin-right: 7px;
+            border-radius: 50%; background: #446995; color: #fff;
+            font-size: 10px; line-height: 17px; text-align: center; font-weight: 600;
+        }
+        .step p { margin: 0 0 8px 24px; opacity: .75; }
+        .snippet { position: relative; margin-left: 24px; }
+        .snippet pre {
+            margin: 0; padding: 8px 10px;
+            background: rgba(0, 0, 0, .045); border: 1px solid rgba(0, 0, 0, .1);
+            border-radius: 3px;
+            font: 11px/1.5 Menlo, Consolas, "Courier New", monospace;
+            white-space: pre; overflow-x: auto;
+        }
+        .snippet .copy {
+            position: absolute; top: 5px; right: 5px;
+            appearance: none; border: 1px solid rgba(0, 0, 0, .15); border-radius: 3px;
+            background: rgba(255, 255, 255, .9); color: inherit;
+            font: 10px/1 inherit; padding: 4px 7px; cursor: pointer; opacity: .7;
+        }
+        .snippet .copy:hover { opacity: 1; }
+        code { font-family: Menlo, Consolas, "Courier New", monospace; font-size: 11px; }
+        table.msgs { width: 100%; border-collapse: collapse; margin-left: 0; }
+        table.msgs th, table.msgs td {
+            text-align: left; vertical-align: top; padding: 4px 8px 4px 0;
+            border-bottom: 1px solid rgba(0, 0, 0, .07);
+        }
+        table.msgs th { font-weight: 600; opacity: .65; font-size: 11px; }
+        table.msgs td:first-child { white-space: nowrap; }
+    </style>
+</head>
+<body>
+    <div class="tabs" role="tablist">
+        <button class="tab" type="button" role="tab" id="tab-settings"
+                aria-controls="panel-settings" aria-selected="true">Settings</button>
+        <button class="tab" type="button" role="tab" id="tab-integration"
+                aria-controls="panel-integration" aria-selected="false">Integration</button>
+    </div>
+
+    <div class="panel" id="panel-settings" role="tabpanel" aria-labelledby="tab-settings">
+        <div class="section">
+            <div class="section-title">Output format</div>
+            <label class="choice">
+                <input type="radio" name="format" value="html"> HTML
+                <span class="hint">Whole-document HTML with the original fonts, sizes, colours and alignment, plus page-geometry CSS.</span>
+            </label>
+            <label class="choice">
+                <input type="radio" name="format" value="markdown"> Markdown
+                <span class="hint">Plain Markdown. Character formatting beyond bold/italic/headings is not representable.</span>
+            </label>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Options</div>
+            <label class="choice">
+                <input type="checkbox" id="opt-base64img"> Embed images as base64
+                <span class="hint">Off means image links point back at the document server and will break outside it.</span>
+            </label>
+            <label class="choice">
+                <input type="checkbox" id="opt-frame"> Send page-geometry CSS with HTML
+                <span class="hint">Reproduces the real page width, margins and default font in the host page.</span>
+            </label>
+            <label class="choice">
+                <input type="checkbox" id="opt-htmlheadings"> Generate HTML headings and IDs
+            </label>
+            <label class="choice">
+                <input type="checkbox" id="opt-demoteheadings"> Demote heading levels
+            </label>
+            <label class="choice">
+                <input type="checkbox" id="opt-renderhtmltags"> Preserve HTML tags in Markdown
+            </label>
+        </div>
+    </div>
+
+    <div class="panel" id="panel-integration" role="tabpanel" aria-labelledby="tab-integration" hidden>
+        <p class="lead">
+            The plugin runs inside the editor with no window of its own. Your page talks to it
+            with <code>postMessage</code>: you ask for the document, it answers with the content,
+            you put that content wherever you want. Five steps, all in the page that embeds the
+            editor.
+        </p>
+
+        <div class="step">
+            <h3><span class="num">1</span>Load the plugin for this client</h3>
+            <p>Add this to the config you hand to <code>DocsAPI.DocEditor</code>. The URL and
+               guid below are this plugin's real ones, read off the running copy - copy the
+               block as it stands. Clients that should not have the export simply do not get
+               it.</p>
+            <div class="snippet"><pre id="snippet-config"></pre></div>
+        </div>
+
+        <div class="step">
+            <h3><span class="num">2</span>Add the target element</h3>
+            <p>Anywhere in your page - this is where the document will land.</p>
+            <div class="snippet"><pre>&lt;div id="output"&gt;&lt;/div&gt;</pre></div>
+        </div>
+
+        <div class="step">
+            <h3><span class="num">3</span>Listen, and keep the sender</h3>
+            <p>The plugin announces itself once it starts. Hold on to
+               <code>event.source</code> - that is the only handle you can reply to.</p>
+            <div class="snippet"><pre>const CHANNEL = "sarv-content-export";
+let plugin = null;
+
+window.addEventListener("message", (event) =&gt; {
+  const data = event.data;
+  if (!data || data.channel !== CHANNEL) return;
+
+  if (data.type === "ready") {
+    plugin = event.source;
+    plugin.postMessage({ channel: CHANNEL, type: "ack" }, "*");
+  }
+});</pre></div>
+        </div>
+
+        <div class="step">
+            <h3><span class="num">4</span>Ask for the document</h3>
+            <p>Call this from your own Submit or Preview button. Leave
+               <code>format</code> out to use whatever the Settings tab says.</p>
+            <div class="snippet"><pre>function requestContent(format) {         // "html" | "markdown" | omit
+  plugin.postMessage(
+    { channel: CHANNEL, type: "extract", requestId: "req-1", format },
+    "*"
+  );
+}</pre></div>
+        </div>
+
+        <div class="step">
+            <h3><span class="num">5</span>Inject the answer</h3>
+            <p>The reply arrives in the same listener you wrote in step 3.
+               <code>css</code> and <code>scope</code> come with HTML only, and reproduce the
+               real page width, margins and default font - drop them and you get bare content.</p>
+            <div class="snippet"><pre>if (data.type === "result") {
+  const box = document.getElementById("output");
+
+  if (data.format === "markdown") {
+    box.textContent = data.content;              // raw Markdown
+  } else {
+    box.className = data.scope || "";            // page-geometry wrapper
+    box.innerHTML = (data.css ? "&lt;style&gt;" + data.css + "&lt;/style&gt;" : "")
+                  + data.content;
+  }
+}
+
+if (data.type === "error") {
+  console.error("export failed:", data.message);
+}</pre></div>
+        </div>
+
+        <div class="step">
+            <h3><span class="num">+</span>Open this window from your page</h3>
+            <p>Optional - a Settings button in your own toolbar.</p>
+            <div class="snippet"><pre>plugin.postMessage({ channel: CHANNEL, type: "openSettings" }, "*");</pre></div>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Every message, both ways</div>
+            <table class="msgs">
+                <tr><th>You send</th><th>What it does</th></tr>
+                <tr><td><code>ack</code></td><td>Confirms you are listening. Stops the ready beacon.</td></tr>
+                <tr><td><code>extract</code></td><td>Returns the document. Optional <code>format</code>, <code>options</code>, <code>requestId</code>.</td></tr>
+                <tr><td><code>getSettings</code></td><td>Answers with the current settings.</td></tr>
+                <tr><td><code>setSettings</code></td><td>Overwrites settings from your page.</td></tr>
+                <tr><td><code>openSettings</code></td><td>Opens this window.</td></tr>
+                <tr><th>You receive</th><th>Payload</th></tr>
+                <tr><td><code>ready</code></td><td><code>guid</code>, <code>editor</code>, <code>settings</code></td></tr>
+                <tr><td><code>result</code></td><td><code>requestId</code>, <code>format</code>, <code>content</code>, <code>css</code>, <code>scope</code>, <code>meta</code></td></tr>
+                <tr><td><code>error</code></td><td><code>requestId</code>, <code>message</code></td></tr>
+                <tr><td><code>settings</code></td><td><code>settings</code> - also sent whenever they change here</td></tr>
+            </table>
+            <p style="margin-left:0">Every message carries
+               <code>channel: "sarv-content-export"</code>; ignore anything that does not.</p>
+        </div>
+    </div>
+
+    <script type="text/javascript" src="scripts/settings.js"></script>
+</body>
+</html>

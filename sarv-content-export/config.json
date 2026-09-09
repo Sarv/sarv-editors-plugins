@@ -1,0 +1,75 @@
+{
+    "name": "Sarv Content Export",
+    "enabled": true,
+    "nameLocale": {
+        "ru": "Экспорт содержимого Sarv",
+        "fr": "Export de contenu Sarv",
+        "es": "Exportación de contenido Sarv",
+        "de": "Sarv Inhaltsexport",
+        "zh-ZH": "Sarv 内容导出",
+        "pt-BR": "Exportação de conteúdo Sarv"
+    },
+    "guid": "asc.{7B2C9E14-5D63-4A81-9F0E-2C6A8D3B4F52}",
+    "version": "1.0.0",
+    "minVersion": "7.4.0",
+
+    "variations": [
+        {
+            "description": "Hands the document content to the host page as HTML or Markdown. Runs in the background with no interface.",
+            "descriptionLocale": {
+                "ru": "Передаёт содержимое документа на страницу-контейнер в формате HTML или Markdown. Работает в фоновом режиме без интерфейса.",
+                "fr": "Transmet le contenu du document à la page hôte en HTML ou Markdown. S'exécute en arrière-plan sans interface.",
+                "es": "Entrega el contenido del documento a la página anfitriona como HTML o Markdown. Se ejecuta en segundo plano sin interfaz.",
+                "de": "Übergibt den Dokumentinhalt als HTML oder Markdown an die Host-Seite. Läuft ohne Oberfläche im Hintergrund.",
+                "zh-ZH": "以 HTML 或 Markdown 格式将文档内容传递给宿主页面。在后台运行，无界面。",
+                "pt-BR": "Entrega o conteúdo do documento à página hospedeira como HTML ou Markdown. Executa em segundo plano sem interface."
+            },
+            "url": "index.html",
+            "icons": ["resources/light/icon.png", "resources/light/icon@2x.png"],
+            "icons2": [
+                {
+                    "theme": "flat",
+                    "style": "light",
+                    "100%":    { "normal": "resources/light/icon.png" },
+                    "125%":    { "normal": "resources/light/icon@1.25x.png" },
+                    "150%":    { "normal": "resources/light/icon@1.5x.png" },
+                    "175%":    { "normal": "resources/light/icon@1.75x.png" },
+                    "200%":    { "normal": "resources/light/icon@2x.png" },
+                    "default": { "normal": "resources/light/icon.png" }
+                },
+                {
+                    "theme": "flatDark",
+                    "style": "dark",
+                    "100%":    { "normal": "resources/dark/icon.png" },
+                    "125%":    { "normal": "resources/dark/icon@1.25x.png" },
+                    "150%":    { "normal": "resources/dark/icon@1.5x.png" },
+                    "175%":    { "normal": "resources/dark/icon@1.75x.png" },
+                    "200%":    { "normal": "resources/dark/icon@2x.png" },
+                    "default": { "normal": "resources/dark/icon.png" }
+                }
+            ],
+
+            "isSystem": true,
+            "isVisual": false,
+            "isModal": false,
+            "isInsideMode": false,
+            "isViewer": true,
+            "isDisplayedInViewer": false,
+            "EditorsSupport": ["word"],
+            "events": ["onToolbarMenuClick"],
+
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": false,
+
+            "store": {
+                "background": { "light": "#2E5BBA", "dark": "#2E5BBA" },
+                "screenshots": [],
+                "icons": { "light": "resources/store/icons", "dark": "resources/store/icons" },
+                "categories": ["specAbilities", "work", "devTools"]
+            }
+        }
+    ],
+
+    "onlyofficeScheme": true
+}
