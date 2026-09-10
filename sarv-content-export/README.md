@@ -38,7 +38,7 @@ Plugin → host:
 |---|---|
 | `ready` | `{ editor, settings }` — repeated every 1s until acked (60 tries max) |
 | `settings` | `{ settings }` — after the user saves in the settings window |
-| `result` | `{ requestId, format, content, css, scope, meta }` |
+| `result` | `{ requestId, ok, format, content, meta }` — `content` is the whole answer, one message, every style inline |
 | `error` | `{ requestId, message }` |
 
 Host → plugin:
@@ -64,8 +64,7 @@ window.addEventListener("message", (event) => {
     plugin.postMessage({ channel: CHANNEL, type: "ack" }, "*");
   }
   if (msg.type === "result") {
-    document.getElementById("output").innerHTML =
-      `<style>${msg.css}</style><div class="${msg.scope}">${msg.content}</div>`;
+    document.getElementById("output").innerHTML = msg.content;   // self-contained
   }
 });
 
@@ -104,22 +103,33 @@ survives, but the **page context** does not — page width, margins and the docu
 default font are lost, and the host page's own CSS bleeds into the fragment. That is why
 the stock HTML plugin's output "loses formatting".
 
-So alongside the content the plugin ships a scoped stylesheet (`css`, applying to
-`scope` = `.sarv-doc-page`) built from the real document:
-`GetFinalSection().GetPageWidth()/GetPageMargin*()` and
-`GetDefaultTextPr().GetFontFamily()/GetFontSize()`. It sets the true page width and
-margins, the default font, a white page ground, and neutralises the host's `p`/`h1`-`h6`/
-`ul`/`ol`/`table` defaults. It also gives a blank `<p>` a zero-width `::after`, because a
-paragraph that is empty in the document comes over as an empty `<p>` with no line box —
-so without it every blank line in the document silently disappears. Wrap the content in
-`<div class="sarv-doc-page">` and it looks like the page.
+So the plugin puts the page context back into the markup itself, and hands over one
+self-contained string. There is no stylesheet to place and no class to apply — `content`
+is the whole answer.
+
+- **The page box** is one wrapper element carrying inline `width`, `padding`, `background`,
+  `font-family` and `font-size` read off the real document:
+  `GetFinalSection().GetPageWidth()/GetPageMargin*()` and
+  `GetDefaultTextPr().GetFontFamily()/GetFontSize()`.
+- **Host defaults are neutralised per element**, not by a descendant selector: every `p`,
+  `h1`-`h6`, `ul`, `ol`, `li`, `table`, `blockquote` and `pre` gets `margin:0;padding:0;
+  font:inherit;color:inherit` written *ahead* of whatever the copy pipeline already put in
+  its `style` attribute, so the document's own values win and the host's cannot reach in.
+  A declaration the tag already makes is skipped rather than duplicated.
+- **A blank paragraph gets a literal zero-width space** instead of a `::after` rule, because
+  a paragraph that is empty in the document comes over as an empty `<p>` with no line box —
+  so without it every blank line in the document silently disappears.
+
+Inline styles also beat the host's stylesheet on specificity, which a scoped stylesheet of
+our own could not promise.
 
 Three things the serializer gets wrong that the plugin repairs before handing the HTML over:
 
 **Lists.** Every `<li>` wraps its text in a `<p>`, and a `<p>` is a block — so with
 `list-style-position: inside` the marker has to take a line box of its own and the text
-drops to the next line, leaving every bullet and number orphaned above its item. The
-stylesheet hangs the marker outside instead, which is also what the document does. The
+drops to the next line, leaving every bullet and number orphaned above its item. Every
+`<li>` is given `list-style-position: outside` instead, which is also what the document does.
+The
 indent itself arrives as an inline `padding-left` on the `<ul>`/`<ol>`, so it is left alone.
 
 **Table width.** The copy pipeline writes every `<td>` its grid width but never writes the
@@ -151,8 +161,8 @@ a float:
   The inner margin, and top/bottom, come from Word's own `distL`/`distR`/`distT`/`distB`.
 - *Top and bottom* becomes `display:block; clear:both`. *Behind / in front of text* has no
   wrapping to express, so it is left in flow.
-- The page scope gets a `::after` clearfix, or a picture taller than the text it wraps
-  would hang out of the bottom of the page box.
+- The page box ends with a `<div style="clear:both">`, or a picture taller than the text it
+  wraps would hang out of the bottom of it.
 
 Measured on a document whose picture spans 0.229–0.770 of the text column, the export puts
 it at 0.228–0.771 with the paragraphs back beside it.
@@ -161,7 +171,8 @@ What still cannot survive: a numbered list loses its number *format* beyond the 
 `list-style-type` — a Word `a)` renders as `a.`, because `list-style-type` has no way to
 express a suffix.
 
-Set `frame: false` in the settings to get the bare fragment with no stylesheet.
+Set `frame: false` in the settings to get the bare fragment with no page box — it then
+renders at whatever width the host element has.
 
 ## Settings
 
@@ -192,7 +203,8 @@ was given and never closes the plugin.
 The window has two tabs. **Settings** holds the values below; **Integration** is a static
 step-by-step guide for whoever embeds the editor - the `editorConfig.plugins` block, the
 target `<div>`, latching `event.source` from the `ready` beacon, asking for `extract`, and
-injecting `content` / `css` / `scope` - with a copy button on every snippet. The
+injecting `content` — plus a field-by-field reference for every message payload, with a copy
+button on every snippet. The
 `editorConfig.plugins` snippet is filled in at runtime rather than written out: `config.json`
 sits beside `settings.html`, so `new URL("config.json", location.href)` is this deployment's
 real plugin URL, and the guid comes from `Asc.plugin.guid`. Dev, staging and production each
@@ -209,7 +221,7 @@ Stored in the plugin origin's `localStorage` under `sarv-content-export.settings
 | key | default | meaning |
 |---|---|---|
 | `format` | `"html"` | `"html"` or `"markdown"` |
-| `frame` | `true` | ship the page-geometry stylesheet with the HTML |
+| `frame` | `true` | wrap the HTML in the document's own page box |
 | `base64img` | `true` | embed images as data URIs |
 | `htmlHeadings` | `false` | Markdown: emit `<h1>` tags instead of `#` |
 | `demoteHeadings` | `false` | Markdown: shift every heading down one level |

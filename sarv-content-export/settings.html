@@ -115,7 +115,7 @@
             <div class="section-title">Output format</div>
             <label class="choice">
                 <input type="radio" name="format" value="html"> HTML
-                <span class="hint">Whole-document HTML with the original fonts, sizes, colours and alignment, plus page-geometry CSS.</span>
+                <span class="hint">Whole-document HTML with the original fonts, sizes, colours and alignment. Every style is inline, so the content is self-contained.</span>
             </label>
             <label class="choice">
                 <input type="radio" name="format" value="markdown"> Markdown
@@ -130,8 +130,8 @@
                 <span class="hint">Off means image links point back at the document server and will break outside it.</span>
             </label>
             <label class="choice">
-                <input type="checkbox" id="opt-frame"> Send page-geometry CSS with HTML
-                <span class="hint">Reproduces the real page width, margins and default font in the host page.</span>
+                <input type="checkbox" id="opt-frame"> Wrap the content in the document's page
+                <span class="hint">Adds one outer element carrying the real page width, margins and default font. Off gives the bare fragment, which renders at whatever width the host element has.</span>
             </label>
             <label class="choice">
                 <input type="checkbox" id="opt-htmlheadings"> Generate HTML headings and IDs
@@ -205,17 +205,17 @@ window.addEventListener("message", (event) =&gt; {
         <div class="step">
             <h3><span class="num">5</span>Inject the answer</h3>
             <p>The reply arrives in the same listener you wrote in step 3.
-               <code>css</code> and <code>scope</code> come with HTML only, and reproduce the
-               real page width, margins and default font - drop them and you get bare content.</p>
+               <code>data.content</code> is the whole answer - every style is inline, page width
+               and margins included, so there is no stylesheet to place and nothing else to
+               wire up. Keep it in a variable instead if you are posting it somewhere rather
+               than showing it.</p>
             <div class="snippet"><pre>if (data.type === "result") {
   const box = document.getElementById("output");
 
   if (data.format === "markdown") {
     box.textContent = data.content;              // raw Markdown
   } else {
-    box.className = data.scope || "";            // page-geometry wrapper
-    box.innerHTML = (data.css ? "&lt;style&gt;" + data.css + "&lt;/style&gt;" : "")
-                  + data.content;
+    box.innerHTML = data.content;                // self-contained HTML
   }
 }
 
@@ -241,9 +241,23 @@ if (data.type === "error") {
                 <tr><td><code>openSettings</code></td><td>Opens this window.</td></tr>
                 <tr><th>You receive</th><th>Payload</th></tr>
                 <tr><td><code>ready</code></td><td><code>guid</code>, <code>editor</code>, <code>settings</code> - repeated once a second until you <code>ack</code> (60 tries, then it gives up)</td></tr>
-                <tr><td><code>result</code></td><td><code>requestId</code>, <code>format</code>, <code>content</code>, <code>css</code>, <code>scope</code>, <code>meta</code></td></tr>
-                <tr><td><code>error</code></td><td><code>requestId</code>, <code>message</code></td></tr>
+                <tr><td><code>result</code></td><td><code>requestId</code>, <code>ok</code>, <code>format</code>, <code>content</code>, <code>meta</code></td></tr>
+                <tr><td><code>error</code></td><td><code>requestId</code>, <code>ok</code>, <code>message</code></td></tr>
                 <tr><td><code>settings</code></td><td><code>settings</code> - also sent whenever they change here</td></tr>
+            </table>
+
+            <div class="section-title" style="margin-top:18px">What each field holds</div>
+            <table class="msgs">
+                <tr><th>Field</th><th>Holds</th></tr>
+                <tr><td><code>channel</code></td><td>Always <code>"sarv-content-export"</code>. On every message, both ways - ignore anything without it.</td></tr>
+                <tr><td><code>requestId</code></td><td>Whatever you sent on the <code>extract</code>, handed straight back. It is how you match a reply to its request when more than one is in flight; the plugin never invents one.</td></tr>
+                <tr><td><code>ok</code></td><td><code>true</code> on <code>result</code>, <code>false</code> on <code>error</code>. Checking <code>data.type</code> is equivalent.</td></tr>
+                <tr><td><code>format</code></td><td>Which format you actually got: <code>"html"</code> or <code>"markdown"</code>. It follows the Settings tab unless your <code>extract</code> overrode it for that one call.</td></tr>
+                <tr><td><code>content</code></td><td><b>The document.</b> One string, sent whole - not chunked, no second message. HTML is self-contained: fonts, sizes, colours, alignment, table widths, image placement and the page box itself are all inline styles. Markdown is the raw text.</td></tr>
+                <tr><td><code>meta</code></td><td>Where the content came from and what page it came from: <code>source</code> (<code>GetFileHTML</code> or <code>ConvertDocument</code>), plus <code>pageWidth</code>, <code>pageHeight</code>, <code>marginLeft/Right/Top/Bottom</code> in twips and <code>fontFamily</code>, <code>fontHalfPt</code> for the document default. Informational - you do not need any of it to render <code>content</code>. Absent geometry means the editor had no document to read it from.</td></tr>
+                <tr><td><code>message</code></td><td>On <code>error</code> only: why the export failed, in one sentence.</td></tr>
+                <tr><td><code>editor</code></td><td>On <code>ready</code> only: which editor the plugin came up in (<code>word</code>, <code>cell</code>, <code>slide</code>). Only <code>word</code> can export.</td></tr>
+                <tr><td><code>settings</code></td><td>The saved settings object: <code>format</code>, <code>base64img</code>, <code>frame</code>, <code>htmlHeadings</code>, <code>demoteHeadings</code>, <code>renderHTMLTags</code>. Send the same shape back with <code>setSettings</code>, or pass any subset as <code>options</code> on one <code>extract</code> to override it for that call only.</td></tr>
             </table>
             <p style="margin-left:0">Every message carries
                <code>channel: "sarv-content-export"</code>; ignore anything that does not.</p>

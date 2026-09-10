@@ -1,5 +1,14 @@
 # Change Log
 
+## v1.1.0
+
+### Content export
+- **`content` is now self-contained - no stylesheet travels with it** — **BREAKING**: the `result` message no longer carries `css` or `scope`. Everything the page context needs is inline in the markup: the page box is one wrapper element with the real width, margins, background and default font on its `style` attribute, and the per-element defaults that used to be descendant selectors are written into each `p`, `h1`-`h6`, `ul`, `ol`, `li`, `table`, `td`, `th`, `blockquote`, `pre`, `img`, `b`, `i` and `a` *ahead* of whatever the copy pipeline already put there, so the document's own values still win. A blank paragraph gets a literal zero-width space instead of a `::after` rule, and the float clearfix is a trailing `<div style="clear:both">`. A host that was doing `<style>${css}</style><div class="${scope}">${content}</div>` becomes `innerHTML = content`. Two fields for one payload was the single most confusing thing about the protocol; inline styles also beat the host's stylesheet on specificity, which a scoped stylesheet of our own could not promise. Measured cost on a 306 KB export: +1.3 KB.
+- **`frame` now means "wrap the content in the document's page"** — same setting, same default, same opt-out; `frame: false` still gives the bare fragment, which renders at whatever width the host element has.
+
+### Integration
+- **The Integration tab documents every payload field** — a new "What each field holds" table covering `channel`, `requestId`, `ok`, `format`, `content`, `meta`, `message`, `editor` and `settings`: what each one carries, that `content` is the whole document in one message rather than chunks, that `format` follows the Settings tab unless the call overrode it, and that `meta` is informational and not needed to render. Step 5 and its snippet shrink to the one `innerHTML` the new reply needs.
+
 ## v1.0.2
 
 ### Documentation

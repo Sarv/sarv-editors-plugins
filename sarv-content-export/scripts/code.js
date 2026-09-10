@@ -20,7 +20,7 @@
  *
  * ── Protocol ────────────────────────────────────────────────────────────────────────
  *   plugin -> host : {channel, type:"ready",    guid, editor, settings}
- *                    {channel, type:"result",   requestId, ok:true, format, content, css, meta}
+ *                    {channel, type:"result",   requestId, ok:true, format, content, meta}
  *                    {channel, type:"error",    requestId, ok:false, message}
  *                    {channel, type:"settings", settings}
  *   host -> plugin : {channel, type:"ack"}                       stops the ready beacon
@@ -43,7 +43,7 @@
         htmlHeadings:   false,
         demoteHeadings: false,
         renderHTMLTags: false,
-        frame:          true      // ship page-geometry CSS alongside the HTML
+        frame:          true      // wrap the HTML in the document's own page box
     };
 
     var READY_BEACON_MS    = 1000;
@@ -407,16 +407,14 @@
     }
 
     /**
-     * A scoped stylesheet that reproduces the page the content came from: real page width,
-     * real margins, the document's default font, and a reset strong enough that the host
-     * page's own CSS cannot bleed into the rendered document.
+     * The page the content came from, as inline declarations for one wrapper element:
+     * real page width, real margins, the document's default font.
      *
      * This is the part the stock HTML plugin has no answer for - it hands over a bare
      * fragment, and dropping that into an arbitrary <div> is where "formatting is not
      * preserved" actually comes from: the inline styles survive, the page context does not.
      */
-    function buildPageCss(meta, scope) {
-        var selector    = "." + scope;
+    function pageBoxDeclarations(meta) {
         var hasGeometry = typeof meta.pageWidth === "number" && meta.pageWidth > 0;
 
         var widthPx   = hasGeometry ? twipsToPx(meta.pageWidth)    : 816;
@@ -431,56 +429,103 @@
             : "11pt";
 
         return [
-            selector + " {",
-            "  box-sizing: border-box;",
-            "  width: " + widthPx + "px;",
-            "  max-width: 100%;",
-            "  margin: 0 auto;",
-            "  padding: " + padTop + "px " + padRight + "px " + padBottom + "px " + padLeft + "px;",
-            "  background: #ffffff;",
-            "  color: #000000;",
-            "  font-family: " + fontFamily + ", serif;",
-            "  font-size: " + fontSize + ";",
-            "  line-height: normal;",
-            "  text-align: left;",
-            "  overflow-wrap: break-word;",
-            "}",
-            /* A wrapped image is a float, so without this the page box ends at the last
-               line of text and any picture taller than it hangs out the bottom. */
-            selector + "::after { content: \"\"; display: block; clear: both; }",
-            /* The fragment carries its own inline spacing, so any host defaults for these
-               elements are noise that shifts every paragraph. Zero them, then let the
-               inline styles from the copy pipeline do the work. */
-            selector + " p,",
-            selector + " h1, " + selector + " h2, " + selector + " h3,",
-            selector + " h4, " + selector + " h5, " + selector + " h6,",
-            selector + " ul, " + selector + " ol, " + selector + " li,",
-            selector + " table, " + selector + " blockquote, " + selector + " pre {",
-            "  margin: 0;",
-            "  padding: 0;",
-            "  font: inherit;",
-            "  color: inherit;",
-            "}",
-            /* A paragraph that is empty in the document still comes over as an empty <p>
-               (or a <p> holding an empty <span>), which has no line box and therefore no
-               height in a browser - so every blank line in the document silently vanishes.
-               A zero-width space gives it back its line. */
-            selector + " p:empty::after { content: \"\\200B\"; }",
-            selector + " p:has(> span:empty)::after { content: \"\\200B\"; }",
-            /* Every <li> from the copy pipeline wraps its text in a <p>, and a <p> is a
-               block: with list-style-position:inside the marker has to take a line box of
-               its own and the text drops to the next line, so every bullet and number ends
-               up orphaned above its item. Hanging the marker outside - which is also what
-               the document does - puts it back beside the first line. The indent itself
-               comes over as an inline padding-left on the <ul>/<ol>, so leave that alone. */
-            selector + " li { list-style-position: outside; }",
-            selector + " b, " + selector + " strong { font-weight: bold; }",
-            selector + " i, " + selector + " em { font-style: italic; }",
-            selector + " img { max-width: 100%; height: auto; }",
-            selector + " table { border-collapse: collapse; }",
-            selector + " td, " + selector + " th { vertical-align: top; }",
-            selector + " a { color: inherit; }"
-        ].join("\n");
+            "box-sizing:border-box",
+            "width:" + widthPx + "px",
+            "max-width:100%",
+            "margin:0 auto",
+            "padding:" + padTop + "px " + padRight + "px " + padBottom + "px " + padLeft + "px",
+            "background:#ffffff",
+            "color:#000000",
+            "font-family:" + fontFamily + ", serif",
+            "font-size:" + fontSize,
+            /* line-height and overflow-wrap inherit, so the wrapper is enough for both. */
+            "line-height:normal",
+            "text-align:left",
+            "overflow-wrap:break-word"
+        ];
+    }
+
+    /**
+     * Defaults every element in the fragment needs, so the content is self-contained and no
+     * separate stylesheet has to travel with it. Written as inline declarations placed
+     * *before* whatever the copy pipeline already wrote, so the document's own values win.
+     *
+     * The fragment carries its own inline spacing, so any host defaults for these elements
+     * are noise that shifts every paragraph - zero them and let the inline styles work.
+     */
+    function elementDefaults() {
+        var map = {};
+        var add = function (names, declarations) {
+            names.forEach(function (name) {
+                map[name] = (map[name] || []).concat(declarations);
+            });
+        };
+
+        add(["p", "h1", "h2", "h3", "h4", "h5", "h6", "ul", "ol", "li", "table", "blockquote", "pre"],
+            ["margin:0", "padding:0", "font:inherit", "color:inherit"]);
+        /* Every <li> from the copy pipeline wraps its text in a <p>, and a <p> is a block:
+           with list-style-position:inside the marker has to take a line box of its own and
+           the text drops to the next line, so every bullet and number ends up orphaned above
+           its item. Hanging the marker outside - which is also what the document does - puts
+           it back beside the first line. The indent itself comes over as an inline
+           padding-left on the <ul>/<ol>, so leave that alone. */
+        add(["li"], ["list-style-position:outside"]);
+        add(["b", "strong"], ["font-weight:bold"]);
+        add(["i", "em"], ["font-style:italic"]);
+        add(["img"], ["max-width:100%", "height:auto"]);
+        add(["table"], ["border-collapse:collapse"]);
+        add(["td", "th"], ["vertical-align:top"]);
+        add(["a"], ["color:inherit"]);
+
+        return map;
+    }
+
+    var DEFAULTED_TAGS = /<(p|h[1-6]|ul|ol|li|table|td|th|blockquote|pre|img|b|strong|i|em|a)\b[^>]*>/gi;
+
+    // A default the tag already declares itself would be dead weight in the style attribute.
+    function undeclared(tag, declarations) {
+        var existing = /\bstyle\s*=\s*"([^"]*)"/i.exec(tag);
+        if (!existing) return declarations;
+        return declarations.filter(function (declaration) {
+            var property = declaration.split(":")[0];
+            return !new RegExp("(^|;)\\s*" + property + "\\s*:", "i").test(existing[1]);
+        });
+    }
+
+    function inlineElementDefaults(html) {
+        var defaults = elementDefaults();
+        return html.replace(DEFAULTED_TAGS, function (tag, name) {
+            return addStyle(tag, name, undeclared(tag, defaults[name.toLowerCase()] || []));
+        });
+    }
+
+    /**
+     * A paragraph that is empty in the document still comes over as an empty <p> (or a <p>
+     * holding an empty <span>), which has no line box and therefore no height in a browser -
+     * so every blank line in the document silently vanishes. A zero-width space gives it
+     * back its line.
+     */
+    function fillEmptyParagraphs(html) {
+        return html
+            .replace(/(<p\b[^>]*>)(\s*)(<\/p>)/gi, "$1&#8203;$3")
+            .replace(/(<p\b[^>]*>\s*<span\b[^>]*>)(\s*)(<\/span>\s*<\/p>)/gi, "$1&#8203;$3");
+    }
+
+    /**
+     * The fragment inside its page box. The trailing clear is not decoration: a wrapped
+     * image is a float, so without it the page box ends at the last line of text and any
+     * picture taller than it hangs out the bottom.
+     */
+    function wrapInPage(html, meta) {
+        return '<div style="' + pageBoxDeclarations(meta).join(";") + '">' +
+               html +
+               '<div style="clear:both"></div>' +
+               "</div>";
+    }
+
+    // Everything the page context needs, folded into the markup itself.
+    function selfContainedHtml(html, meta) {
+        return wrapInPage(fillEmptyParagraphs(inlineElementDefaults(html)), meta);
     }
 
     function extract(request) {
@@ -497,19 +542,16 @@
                 );
             }
             if (options.format === "markdown") {
-                return { format: "markdown", content: result.content, css: "", scope: "", meta: { source: result.source } };
+                return { format: "markdown", content: result.content, meta: { source: result.source } };
             }
             if (!options.frame) {
-                return { format: "html", content: result.content, css: "", scope: "", meta: { source: result.source } };
+                return { format: "html", content: result.content, meta: { source: result.source } };
             }
             return readDocumentMeta().then(function (meta) {
-                var scope = "sarv-doc-page";
                 meta.source = result.source;
                 return {
                     format:  "html",
-                    content: result.content,
-                    css:     buildPageCss(meta, scope),
-                    scope:   scope,
+                    content: selfContainedHtml(result.content, meta),
                     meta:    meta
                 };
             });
@@ -681,8 +723,6 @@
                         ok:        true,
                         format:    result.format,
                         content:   result.content,
-                        css:       result.css,
-                        scope:     result.scope,
                         meta:      result.meta
                     });
                 }).catch(function (err) {
