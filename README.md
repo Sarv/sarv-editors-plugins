@@ -63,6 +63,7 @@ The dev server re-reads each plugin's `config.json` on every request, so changes
 | **Autocomplete** | Use an input assistant while typing in the editors. |
 | **Bergamot Translator** | Offline machine translation powered by Bergamot — privacy-friendly, works without internet. |
 | **Chess** | Play chess with other collaborators right in the editors. |
+| **Content Filter** | Scan documents for allowed and disallowed content using rule lists fetched from your API. |
 | **CVbuilder** | A resume generation plugin, aiming to help users swiftly create resumes. |
 | **Date Picker** | Insert formatted dates into cells. |
 | **DeepL** | Translate the selected text into other languages using DeepL. |
@@ -89,6 +90,7 @@ The dev server re-reads each plugin's `config.json` on every request, so changes
 | **Pixabay** | Find and insert free images in your documents via Pixabay. |
 | **Pomodoro** | Improve focus and productivity with 25-minute work cycles and 5-minute breaks. |
 | **Rainbow** | Exchange instant messages and make calls using Rainbow. |
+| **Sarv Content Export** | Hand the document content to the host page as HTML or Markdown. Runs in the background with no interface. |
 | **Speech** | Convert the selected text into speech. |
 | **Speech Input** | Type with your voice by converting spoken words into text. |
 | **Telegram** | Chat with co-authors in real time using an integrated Telegram client. |
