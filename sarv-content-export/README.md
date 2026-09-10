@@ -24,6 +24,10 @@ Because the host cannot address the plugin first (it has no handle on the hidden
 the plugin **beacons** `ready` upward once a second until the host acks, then the host
 replies through the latched `event.source`.
 
+The plugin starts *after* the document does, so `onDocumentReady` is too early to send
+anything — gate the first `extract` on `ready` having arrived, not on the editor's own
+ready event.
+
 ## Protocol
 
 All messages carry `channel: "sarv-content-export"`.

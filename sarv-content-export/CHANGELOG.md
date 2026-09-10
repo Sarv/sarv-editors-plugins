@@ -1,5 +1,10 @@
 # Change Log
 
+## v1.0.2
+
+### Documentation
+- **The Integration tab says when the first `extract` is safe to send** — the plugin starts after the document does, so a host that hangs its first request on `onDocumentReady` finds no plugin to send it to. Step 4 now states the gate outright: wait for `ready`, then enable the button or flush a queued request from that branch. The `ready` row of the message table carries the beacon's cadence and its 60-try limit, which is the reason the gate exists. Same note added to the README's protocol section so the repo doc and the in-editor tab agree.
+
 ## v1.0.1
 
 ### Bug fixes

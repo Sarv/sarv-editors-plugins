@@ -190,6 +190,10 @@ window.addEventListener("message", (event) =&gt; {
             <h3><span class="num">4</span>Ask for the document</h3>
             <p>Call this from your own Submit or Preview button. Leave
                <code>format</code> out to use whatever the Settings tab says.</p>
+            <p><b>Wait for <code>ready</code> first.</b> The plugin starts after the document
+               does, so <code>onDocumentReady</code> is too early - <code>plugin</code> is still
+               <code>null</code> there. Gate on step 3 having run: enable your button in the
+               <code>ready</code> branch, or queue the request and send it from there.</p>
             <div class="snippet"><pre>function requestContent(format) {         // "html" | "markdown" | omit
   plugin.postMessage(
     { channel: CHANNEL, type: "extract", requestId: "req-1", format },
@@ -236,7 +240,7 @@ if (data.type === "error") {
                 <tr><td><code>setSettings</code></td><td>Overwrites settings from your page.</td></tr>
                 <tr><td><code>openSettings</code></td><td>Opens this window.</td></tr>
                 <tr><th>You receive</th><th>Payload</th></tr>
-                <tr><td><code>ready</code></td><td><code>guid</code>, <code>editor</code>, <code>settings</code></td></tr>
+                <tr><td><code>ready</code></td><td><code>guid</code>, <code>editor</code>, <code>settings</code> - repeated once a second until you <code>ack</code> (60 tries, then it gives up)</td></tr>
                 <tr><td><code>result</code></td><td><code>requestId</code>, <code>format</code>, <code>content</code>, <code>css</code>, <code>scope</code>, <code>meta</code></td></tr>
                 <tr><td><code>error</code></td><td><code>requestId</code>, <code>message</code></td></tr>
                 <tr><td><code>settings</code></td><td><code>settings</code> - also sent whenever they change here</td></tr>
