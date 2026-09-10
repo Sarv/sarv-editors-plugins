@@ -1,5 +1,12 @@
 # Change Log
 
+## v1.0.1
+
+### Bug fixes
+- **Copy buttons are visible in the dark theme** — the Integration tab's Copy pills were a translucent white chip carrying inherited text, which on a dark panel meant light text on a light pill and nothing readable. The pill is now an opaque `--background-normal` chip with `--text-normal`, which contrasts against the snippet block in both themes.
+- **The whole settings window follows the editor theme** — the editor recolours only a fixed selector list inside a plugin frame, so the tabs, section titles, step numbers, snippet blocks, lead text and the message table kept their hardcoded light colours. They now read the editor's theme tokens, republished as CSS custom properties by the shared `v1/plugin-theme.js`, with the previous light values as fallbacks. Every text-on-background pair in the window clears 4.5:1 in both themes.
+- **Native controls follow the theme** — the format radios were drawn light on a dark panel because the browser paints them and ignores CSS tokens; `color-scheme` is now set from the theme type.
+
 ## v1.0.0
 
 - Initial release.
