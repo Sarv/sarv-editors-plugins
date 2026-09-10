@@ -5,29 +5,39 @@
     <title>Sarv Content Export - Settings</title>
     <link rel="stylesheet" href="../v1/plugins.css">
     <script type="text/javascript" src="../v1/plugins.js"></script>
+    <script type="text/javascript" src="../v1/plugin-theme.js"></script>
     <style>
+        /* Colours come from the editor theme, published as custom properties by
+           ../v1/plugin-theme.js. Every fallback is the light-theme value, so the window
+           still reads correctly if the theme has not arrived yet. */
         html, body { height: 100%; margin: 0; padding: 0; }
         body {
             font: 12px/1.45 "Helvetica Neue", Helvetica, Arial, sans-serif;
             display: flex; flex-direction: column;
             box-sizing: border-box;
+            color: var(--text-normal, rgba(0, 0, 0, .8));
+            background-color: var(--background-toolbar, #fff);
         }
 
         /* Tabs. Only the active panel scrolls, so the tab strip stays put while the
            integration guide - which is much taller than the window - is read. */
         .tabs {
             display: flex; flex: none;
-            border-bottom: 1px solid rgba(0, 0, 0, .12);
+            border-bottom: 1px solid var(--border-divider, #eaeaea);
             padding: 0 16px;
         }
         .tab {
             appearance: none; background: none; border: 0;
             padding: 10px 2px; margin-right: 20px;
-            font: inherit; color: inherit; cursor: pointer;
+            font: inherit; cursor: pointer;
+            color: var(--text-secondary, rgba(0, 0, 0, .6));
             border-bottom: 2px solid transparent;
-            opacity: .6;
         }
-        .tab[aria-selected="true"] { opacity: 1; font-weight: 600; border-bottom-color: #446995; }
+        .tab[aria-selected="true"] {
+            font-weight: 600;
+            color: var(--text-normal, rgba(0, 0, 0, .8));
+            border-bottom-color: var(--background-accent-button, #446995);
+        }
 
         .panel { flex: 1 1 auto; overflow-y: auto; padding: 14px 16px; }
         .panel[hidden] { display: none; }
@@ -35,46 +45,60 @@
         .section { margin-bottom: 18px; }
         .section-title {
             font-weight: 600; text-transform: uppercase; letter-spacing: .04em;
-            font-size: 11px; opacity: .65; margin-bottom: 8px;
+            font-size: 11px; margin-bottom: 8px;
+            color: var(--text-secondary, rgba(0, 0, 0, .6));
         }
         .choice { display: block; margin-bottom: 8px; cursor: pointer; }
         .choice input { margin-right: 8px; vertical-align: -1px; }
-        .choice .hint { display: block; margin-left: 22px; opacity: .6; font-size: 11px; }
+        .choice .hint {
+            display: block; margin-left: 22px; font-size: 11px;
+            color: var(--text-secondary, rgba(0, 0, 0, .6));
+        }
 
         /* Integration guide */
-        .lead { margin: 0 0 16px; opacity: .75; }
+        .lead { margin: 0 0 16px; color: var(--text-secondary, rgba(0, 0, 0, .6)); }
         .step { margin-bottom: 18px; }
         .step h3 {
             margin: 0 0 6px; font-size: 12px; font-weight: 600;
         }
         .step h3 .num {
             display: inline-block; width: 17px; height: 17px; margin-right: 7px;
-            border-radius: 50%; background: #446995; color: #fff;
+            border-radius: 50%; color: #fff;
+            background: var(--background-accent-button, #446995);
             font-size: 10px; line-height: 17px; text-align: center; font-weight: 600;
         }
-        .step p { margin: 0 0 8px 24px; opacity: .75; }
+        .step p { margin: 0 0 8px 24px; color: var(--text-secondary, rgba(0, 0, 0, .6)); }
         .snippet { position: relative; margin-left: 24px; }
         .snippet pre {
             margin: 0; padding: 8px 10px;
-            background: rgba(0, 0, 0, .045); border: 1px solid rgba(0, 0, 0, .1);
+            background: var(--background-toolbar-additional, #efefef);
+            border: 1px solid var(--border-regular-control, #e1e1e1);
             border-radius: 3px;
             font: 11px/1.5 Menlo, Consolas, "Courier New", monospace;
             white-space: pre; overflow-x: auto;
         }
+        /* An opaque pill over the snippet - background-normal contrasts with the snippet
+           in both themes, where a translucent white only worked against the light one. */
         .snippet .copy {
             position: absolute; top: 5px; right: 5px;
-            appearance: none; border: 1px solid rgba(0, 0, 0, .15); border-radius: 3px;
-            background: rgba(255, 255, 255, .9); color: inherit;
-            font: 10px/1 inherit; padding: 4px 7px; cursor: pointer; opacity: .7;
+            appearance: none; border-radius: 3px;
+            border: 1px solid var(--border-regular-control, #e1e1e1);
+            background: var(--background-normal, #fff);
+            color: var(--text-normal, rgba(0, 0, 0, .8));
+            font: 10px/1 inherit; padding: 4px 7px; cursor: pointer;
         }
-        .snippet .copy:hover { opacity: 1; }
+        .snippet .copy:hover { background: var(--highlight-button-hover, #eaeaea); }
+        .snippet .copy[disabled] { cursor: default; }
         code { font-family: Menlo, Consolas, "Courier New", monospace; font-size: 11px; }
         table.msgs { width: 100%; border-collapse: collapse; margin-left: 0; }
         table.msgs th, table.msgs td {
             text-align: left; vertical-align: top; padding: 4px 8px 4px 0;
-            border-bottom: 1px solid rgba(0, 0, 0, .07);
+            border-bottom: 1px solid var(--border-divider, #eaeaea);
         }
-        table.msgs th { font-weight: 600; opacity: .65; font-size: 11px; }
+        table.msgs th {
+            font-weight: 600; font-size: 11px;
+            color: var(--text-secondary, rgba(0, 0, 0, .6));
+        }
         table.msgs td:first-child { white-space: nowrap; }
     </style>
 </head>
