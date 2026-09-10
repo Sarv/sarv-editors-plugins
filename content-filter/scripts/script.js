@@ -915,13 +915,4 @@
         updateStatusBar();
     };
 
-    window.Asc.plugin.onThemeChanged = function (theme) {
-        window.Asc.plugin.onThemeChangedBase(theme);
-        if (!isDomReady) return;
-        var bg = (theme && theme['background-normal']) || '';
-        document.querySelectorAll('.v-item, .rule-item, .history-item').forEach(function (el) {
-            if (bg) el.style.background = bg;
-        });
-    };
-
 })();

@@ -83,9 +83,6 @@
         window.Asc.plugin.executeCommand('close', '');
     };
 
-    window.Asc.plugin.onTranslate    = function () { updateCacheInfo(); };
-    window.Asc.plugin.onThemeChanged = function (theme) {
-        window.Asc.plugin.onThemeChangedBase(theme);
-    };
+    window.Asc.plugin.onTranslate = function () { updateCacheInfo(); };
 
 })();

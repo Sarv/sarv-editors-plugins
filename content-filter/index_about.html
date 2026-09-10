@@ -7,13 +7,11 @@
     <link rel="stylesheet" href="styles/style.css">
     <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins.js"></script>
     <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins-ui.js"></script>
+    <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugin-theme.js"></script>
     <script>
         window.Asc.plugin.init = function () {};
         window.Asc.plugin.button = function () {
             window.Asc.plugin.executeCommand('close', '');
-        };
-        window.Asc.plugin.onThemeChanged = function (theme) {
-            window.Asc.plugin.onThemeChangedBase(theme);
         };
     </script>
 </head>
