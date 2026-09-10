@@ -2,6 +2,19 @@
 
 ---
 
+## v1.2.1
+
+### Bug fixes
+- **Panel is legible in the dark theme** — the editor only recolours a fixed list of selectors inside a plugin frame (`body`, `.form-control`, `.btn-text-default`, links, scrollbars), so everything this plugin styles itself kept its hardcoded light values: white violation/rule/history cards, light-grey category chips, and a tab badge that all but vanished. Every neutral colour now comes from the editor's own theme tokens, republished as CSS custom properties by the shared `v1/plugin-theme.js`.
+- **Status colours have a dark variant** — the red, green, amber and blue tints behind the warning bar, result summary, countdown banner, Remove buttons and history source badges were washed out to unreadable on a dark panel (the badge measured 1.3:1). Each is now a `--cf-*` pair redefined under `data-theme-type="dark"`; every text-on-background pair in the panel clears 4.5:1 in both themes.
+- **Native controls follow the theme** — checkboxes, radios and scrollbars are painted by the browser and ignore CSS tokens entirely, so they stayed light on a dark panel. `color-scheme` is now set from the theme type.
+- **Amber warning text darkened in the light theme** — `#E65100` on its light amber tint was only 3.46:1, so it moved to `#C24400` (4.65:1). This is the one visible change to the light theme; it is near-imperceptible in practice.
+
+### Improvements
+- **Theme handling moved out of the plugin** — the per-file `onThemeChanged` overrides in `scripts/script.js`, `scripts/settings.js` and `index_about.html` (which repainted a few card backgrounds inline) are gone. The shared helper owns the callback and still chains `onThemeChangedBase`, so the editor's own recolouring keeps working.
+
+---
+
 ## v1.2.0
 
 ### Bug fixes
