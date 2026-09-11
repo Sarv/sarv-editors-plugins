@@ -1,5 +1,5 @@
 {
-    "Configure Content Filter": "配置内容过滤器",
+    "Configure Sarv Content Filter": "配置 Sarv 内容过滤器",
     "Enter your API URL to load allowed and disallowed content rules. Open Settings for advanced field mapping and cache options.": "输入您的 API URL 以加载允许和禁止的内容规则。打开设置以使用高级字段映射和缓存选项。",
     "API URL": "API 地址",
     "API Key": "API 密钥",
@@ -28,6 +28,6 @@
     "No cache": "无缓存",
     "Cache": "缓存",
     "Clear Cache": "清除缓存",
-    "Content Filter": "内容过滤器",
+    "Sarv Content Filter": "Sarv 内容过滤器",
     "Scans documents for allowed and disallowed words and phrases using rule lists fetched from a configurable API.": "使用从可配置 API 获取的规则列表扫描文档中允许和禁止的词语和短语。"
 }

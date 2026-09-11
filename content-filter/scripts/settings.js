@@ -1,88 +1,82 @@
 /*
- * Content Filter Plugin — settings page script  v1.1.0
+ * Content Filter Plugin — the panel's Settings view  v1.4.0
  *
- * Only 4 user-configurable values remain:
- *   apiUrl, autoRemoveDelay, scanIntervalMs, cacheTtlHours
+ * The four values a user may change, edited in place inside the panel instead of in a modal
+ * window of their own. The plugin declares a single variation, so its toolbar button is a
+ * plain button like every other plugin's - one hover region, its icon spaced like the rest -
+ * and there is no dropdown left to hang a Settings entry off.
  *
- * All API params (size, skip, since, userId) and field mappings
- * are fixed in the main script and not user-configurable.
+ * Owns no plugin lifecycle hook: scripts/script.js opens this view and decides when to read
+ * and write it. The storage keys, the defaults and the config reader/writer come from
+ * scripts/policy-core.js, shared with the worker, so nothing here is a second copy of them.
  */
-(function () {
+(function (window) {
     'use strict';
 
-    var CONFIG_KEY = 'CONTENT_FILTER_CONFIG';
-    var CACHE_KEY  = 'CONTENT_FILTER_CACHE';
+    var core = window.SarvContentPolicy;
 
-    function getConfig() {
-        try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; }
-        catch (e) { return {}; }
-    }
+    var tr = function (text) {
+        return (window.Asc && window.Asc.plugin && window.Asc.plugin.tr)
+            ? window.Asc.plugin.tr(text) : text;
+    };
 
-    function getCacheEntry() {
-        try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || null; }
-        catch (e) { return null; }
-    }
+    var field = function (id) { return window.document.getElementById(id); };
 
-    function val(id)       { return document.getElementById(id).value.trim(); }
-    function setVal(id, v) { document.getElementById(id).value = v; }
+    var intOf = function (id, fallback) {
+        return parseInt(field(id).value, 10) || fallback;
+    };
 
-    function populateForm() {
-        var cfg = getConfig();
-
-        setVal('f-auto-remove',   cfg.autoRemoveDelay  !== undefined ? cfg.autoRemoveDelay : 0);
-        setVal('f-scan-interval', cfg.scanIntervalMs   !== undefined ? cfg.scanIntervalMs  : 3000);
-        setVal('f-cache-hours',   cfg.cacheTtlHours    || 24);
-
-        updateCacheInfo();
-    }
-
-    function updateCacheInfo() {
-        var entry = getCacheEntry();
-        var el    = document.getElementById('cache-info');
-        if (!entry || !entry.timestamp) {
-            el.textContent = window.Asc.plugin.tr('No cache');
-            return;
-        }
-        var r         = entry.rules || {};
-        var nAllow    = (r.allowed    || []).length;
-        var nDisallow = (r.disallowed || []).length;
+    /** What the stored cache holds, in one line - or why there is nothing to describe. */
+    var describeCache = function (entry) {
+        if (!entry || !entry.timestamp) return tr('No cache');
+        var rules      = entry.rules || core.emptyRules(),
+            allowed    = (rules.allowed || []).length,
+            disallowed = (rules.disallowed || []).length;
         var parts = [
-            window.Asc.plugin.tr('Cached') + ': ' + (nAllow + nDisallow) + ' ' +
-                window.Asc.plugin.tr('rules') +
-                ' (' + nDisallow + ' ' + window.Asc.plugin.tr('disallowed') +
-                ', ' + nAllow + ' ' + window.Asc.plugin.tr('allowed') + ')',
-            window.Asc.plugin.tr('synced') + ' ' + new Date(entry.timestamp).toLocaleString()
+            tr('Cached') + ': ' + (allowed + disallowed) + ' ' + tr('rules') +
+                ' (' + disallowed + ' ' + tr('disallowed') + ', ' + allowed + ' ' + tr('allowed') + ')',
+            tr('synced') + ' ' + new Date(entry.timestamp).toLocaleString()
         ];
-        if (entry.lastRecordDate) {
-            parts.push(window.Asc.plugin.tr('last record date') + ': ' + entry.lastRecordDate);
-        }
-        el.textContent = parts.join(' \u2014 ');
-    }
-
-    function saveForm() {
-        var cfg = getConfig();
-
-        cfg.autoRemoveDelay = parseInt(val('f-auto-remove'),   10) || 0;
-        cfg.scanIntervalMs  = parseInt(val('f-scan-interval'), 10) || 3000;
-        cfg.cacheTtlHours   = parseInt(val('f-cache-hours'),   10) || 24;
-
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
-    }
-
-    window.Asc.plugin.init = function () {
-        populateForm();
-
-        document.getElementById('btn-clear-cache').addEventListener('click', function () {
-            localStorage.removeItem(CACHE_KEY);
-            updateCacheInfo();
-        });
+        if (entry.lastRecordDate) parts.push(tr('last record date') + ': ' + entry.lastRecordDate);
+        return parts.join(' — ');
     };
 
-    window.Asc.plugin.button = function (id) {
-        if (id === 0) saveForm();
-        window.Asc.plugin.executeCommand('close', '');
+    var refreshCacheInfo = function () {
+        var el = field('cache-info');
+        if (el) el.textContent = describeCache(core.readCache());
     };
 
-    window.Asc.plugin.onTranslate = function () { updateCacheInfo(); };
+    /** Fills the form from what is stored, falling back to the shared defaults. */
+    var populate = function () {
+        var config = core.getConfig();
+        field('f-auto-remove').value   = config.autoRemoveDelay !== undefined ? config.autoRemoveDelay : 0;
+        field('f-scan-interval').value = config.scanIntervalMs !== undefined
+            ? config.scanIntervalMs : core.DEFAULT_SCAN_MS;
+        field('f-cache-hours').value   = config.cacheTtlHours || core.DEFAULT_CACHE_HRS;
+        refreshCacheInfo();
+    };
 
-})();
+    /** Stores what the form holds, and hands it back so the caller can apply it at once. */
+    var save = function () {
+        var config = core.getConfig();
+        config.autoRemoveDelay = intOf('f-auto-remove', 0);
+        config.scanIntervalMs  = intOf('f-scan-interval', core.DEFAULT_SCAN_MS);
+        config.cacheTtlHours   = intOf('f-cache-hours', core.DEFAULT_CACHE_HRS);
+        core.writeConfig(config);
+        return config;
+    };
+
+    /** Drops the rules kept on this machine; the next sync fetches the whole list again. */
+    var clearCache = function () {
+        window.localStorage.removeItem(core.CACHE_KEY);
+        refreshCacheInfo();
+    };
+
+    window.SarvContentFilterSettings = {
+        populate:         populate,
+        save:             save,
+        clearCache:       clearCache,
+        refreshCacheInfo: refreshCacheInfo
+    };
+
+})(window);

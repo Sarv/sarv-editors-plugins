@@ -1,7 +1,17 @@
 {
-    "name": "Content Filter",
+    "name": "Sarv Content Filter",
     "enabled": true,
+    "canRemoved": false,
     "nameLocale": {
+        "ru": "Фильтр контента Sarv",
+        "fr": "Filtre de contenu Sarv",
+        "es": "Filtro de contenido Sarv",
+        "de": "Sarv Inhaltsfilter",
+        "zh-ZH": "Sarv 内容过滤器",
+        "pt-BR": "Filtro de conteúdo Sarv"
+    },
+    "nameShort": "Content Filter",
+    "nameShortLocale": {
         "ru": "Фильтр контента",
         "fr": "Filtre de contenu",
         "es": "Filtro de contenido",
@@ -10,7 +20,7 @@
         "pt-BR": "Filtro de conteúdo"
     },
     "guid": "asc.{A7F3D421-8C5B-4E9F-B2A6-1D8E7C3F5A90}",
-    "version": "1.1.0",
+    "version": "1.4.0",
     "variations": [
         {
           "description": "Scan documents for allowed and disallowed content using rule lists fetched from your API.",
@@ -73,64 +83,6 @@
             },
             "categories": ["specAbilities", "work"]
           }
-        },
-        {
-            "description": "Settings",
-            "descriptionLocale": {
-                "ru": "Настройки",
-                "fr": "Paramètres",
-                "es": "Configuración",
-                "de": "Einstellungen",
-                "zh-ZH": "设置",
-                "pt-BR": "Configurações"
-            },
-            "url": "index_setting.html",
-            "isViewer": false,
-            "EditorsSupport": ["word", "cell", "slide", "pdf"],
-            "isVisual": true,
-            "isModal": true,
-            "isInsideMode": false,
-            "initDataType": "none",
-            "initData": "",
-            "isUpdateOleOnResize": false,
-            "buttons": [
-                {
-                    "text": "Ok",
-                    "textLocale": {
-                        "ru": "ОК", "fr": "Ok", "es": "Aceptar",
-                        "de": "Ok", "zh-ZH": "确定", "pt-BR": "Ok"
-                    },
-                    "primary": true
-                }
-            ],
-            "size": [420, 400]
-        },
-        {
-            "description": "About",
-            "descriptionLocale": {
-                "ru": "О программе",
-                "fr": "À propos",
-                "es": "Acerca de",
-                "de": "Über",
-                "zh-ZH": "关于",
-                "pt-BR": "Sobre"
-            },
-            "url": "index_about.html",
-            "isViewer": false,
-            "EditorsSupport": ["word", "cell", "slide", "pdf"],
-            "isVisual": true,
-            "isModal": true,
-            "isInsideMode": false,
-            "initDataType": "none",
-            "initData": "",
-            "isUpdateOleOnResize": false,
-            "buttons": [
-                {
-                    "text": "Ok",
-                    "primary": true
-                }
-            ],
-            "size": [400, 130]
         }
     ],
     "onlyofficeScheme": true

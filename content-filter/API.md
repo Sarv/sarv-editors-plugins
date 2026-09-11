@@ -94,26 +94,150 @@ This means violation results appear immediately, even on slow networks.
 
 ---
 
-## Deploy-time configuration (`scripts/script.js`)
+## Configuring the endpoint
+
+Both halves of the feature - the `content-filter` panel and the `content-filter-worker` system
+plugin - read the rule list through one shared file, `content-filter/scripts/policy-core.js`, so
+they are configured together and cannot drift apart.
+
+### From the editor config (preferred)
+
+The integrator passes the endpoint and the tokens in `editorConfig.plugins.options`. The editor
+hands that block to every plugin it starts, so a new endpoint or a rotated token needs no change
+to the plugin and no republish:
 
 ```javascript
-var API_ENDPOINT       = 'https://dev-console.sarv.com/drive-api/v1/external/get-content-policy';
-var API_SESSION_TOKEN  = '<session-token>';
-var API_BEARER_TOKEN   = '<bearer-token>';
-var API_ACTIVE_ACCOUNT = '0';
-var API_ORG_ID         = '';   // leave empty to infer from Session-Token
+new DocsAPI.DocEditor("placeholder", {
+    document:   { /* ... */ },
+    editorConfig: {
+        plugins: {
+            pluginsData: [
+                "https://plugins.example.com/content-filter-worker/config.json",
+                "https://plugins.example.com/content-filter/config.json"
+            ],
+            // The worker has no button, so it can only ever start from here.
+            autostart: ["asc.{C3D8B617-4E92-4B7A-9F51-6A2D0C8E4B73}"],
+            options: {
+                all: {                          // reaches the worker and the panel alike
+                    contentPolicy: {
+                        endpoint:      "https://drive.example.com/api/get-content-policy",
+                        sessionToken:  "<the signed-in user's session token>",
+                        bearerToken:   "<the service token>",
+                        activeAccount: "0",
+                        orgId:         "acme"   // omit to infer from the session token
+                    }
+                }
+            }
+        }
+    }
+});
 ```
 
-All values are set once before publishing. End users never see or change them.
+Notes:
+
+- **Every field is optional.** Anything left out (or set to an empty string) keeps the built-in
+  value, so a deployment may pass only the `endpoint`.
+- **`all` vs. a guid.** `options.all` is merged into what every plugin receives; `options["asc.{…}"]`
+  applies to that plugin alone and, since the editor overlays options **per property**, a
+  guid-specific `contentPolicy` replaces the one in `all` whole rather than field by field.
+  Configure through `all` unless the panel and the worker really need different services.
+- **Rotation works mid-session.** Calling `docEditor.setPluginsOptions(...)` re-sends the block;
+  the worker treats that as a reason to re-fetch the rule list rather than waiting for its cache
+  to expire (`Asc.plugin.onUpdateOptions`).
+- Nothing is read at load time - the settings are resolved on each request via
+  `SarvContentPolicy.apiSettings()`.
+
+### Built-in fallbacks (`content-filter/scripts/policy-core.js`)
+
+For a deployment that configures nothing, `API_DEFAULTS` in that file holds the same five fields.
+They are the last resort, not the place to configure a tenant:
+
+```javascript
+const API_DEFAULTS = {
+    endpoint:      "https://dev-console.sarv.com/drive-api/v1/external/get-content-policy",
+    sessionToken:  "…",
+    bearerToken:   "your_token_here",
+    activeAccount: "0",
+    orgId:         ""    // leave empty to infer from Session-Token
+};
+```
+
+End users never see or change any of this - the Settings view exposes only the operational
+preferences below.
 
 ---
 
 ## User-configurable settings
 
-End users can adjust only these operational preferences via the Settings panel:
+End users can adjust only these operational preferences, in the panel's own Settings view -
+the gear in its status bar, beside Refresh. There is no Settings window and no dropdown on the
+toolbar button: the plugin declares a single variation so that its button is a plain one, like
+every other plugin's.
 
 | Setting | Default | Description |
 |---|---|---|
 | **Auto-Remove Delay** | `0` s | Seconds before violations are auto-removed. `0` = disabled. |
 | **Scan Interval** | `3000` ms | Milliseconds between background scans. |
 | **Cache Duration** | `24` h | Hours before a full re-sync is triggered. |
+
+---
+
+## Server-side enforcement (the `callbackUrl` half)
+
+The plugin is not the enforcement boundary. It tells the user what is wrong while they can still
+fix it — it highlights the words and holds the save shut — but a client can be an unpatched
+build, a plugin can fail to load, and a co-author's change reaches the other clients before any
+save. **The drive has to refuse the version itself.**
+
+That happens in the drive's `callbackUrl` handler (the endpoint passed in the editor config),
+which the document server posts to whenever a version is finished.
+
+### The check
+
+1. Act on `status` **2** (`MustSave`, session ending) and **6** (`ForceSave`, Ctrl+S or a version
+   flush). `status` 1/4 carry no file; 3/7 are save errors.
+2. Convert the file at `url` to plain text through the document server, so the check reads what
+   the file actually contains rather than trusting the client:
+
+   ```
+   POST <docserver>/ConvertService.ashx
+   Authorization: Bearer <jwt.sign({ payload }, SECRET)>
+
+   { "async": false, "filetype": "docx", "outputtype": "txt",
+     "key": "<new for every conversion>", "title": "policy-check.docx",
+     "url": "<the callback's url>", "token": "<the same jwt>" }
+   ```
+
+   The answer carries `fileUrl`; GET it for the text. `url` must be reachable **from the document
+   server's container**, and `key` must be new every time — the converter caches by key and would
+   otherwise hand back the previous document's text.
+3. Match the policy words against that text **case-insensitively, as substrings**. Converting a
+   pdf to text drops some of the spaces between words (`"Thisparagraphmentions Confidential"`), so
+   a whole-word or token check lets a pdf through that the editor itself flags. Over-matching is
+   the safe direction here.
+4. When any word is present: **store nothing** and answer the callback with a non-zero `error`
+   (`{"error": 1}`). The document server then reports the save as failed to every client and keeps
+   the changes, so the user still has the document and can take the word out. A blocked version
+   leaves no trace in the drive.
+5. When the conversion itself fails, refuse as well — a policy that goes quiet whenever the
+   converter is down is not a policy.
+
+### Reference implementation
+
+`scripts/contentPolicyGuard.js` in the `scripts` sibling repo (`policyWords`, `wordsPresentIn`,
+`documentToText`, `findPolicyViolations`), wired into the local harness drive at
+`scripts/server-local.js` → `POST /save-document`. It is off unless `CF_POLICY_WORDS` is set, so
+an ordinary save pays no conversion round trip. Probe: `node scripts/editor/probe-policy-guard.js`.
+
+### Editor-side API this relies on
+
+Both halves read the same word list, but the editor half is driven by three plugin methods added
+for it in sdkjs — available to **system plugins only** (`content-filter-worker` is one; the
+sidebar panel is not):
+
+| Method | What it does |
+|---|---|
+| `HighlightTerms(terms, { matchCase, wholeWords })` | Highlights every occurrence of every term in one pass, the way the search panel highlights matches — no edit, nothing written to the file, nothing for co-authors. Answers `{ count, matched }`; `matched` names the terms the document actually holds, which is the only way to find them in a pdf. `count` is `-1` while a pdf's text is still being extracted. |
+| `ClearHighlightTerms()` | Takes the highlight off. |
+| `SetContentPolicyBlock(reason)` | Refuses `asc_Save` and every download while `reason` is set, reporting `reason` verbatim to the user; pass an empty value to lift it. Owned by the calling plugin, so one holder cannot clear another's. |
+| `GetContentPolicyBlock()` | The reason in force, or `null`. Readable by **any** plugin, so a panel can explain a block another plugin set. |

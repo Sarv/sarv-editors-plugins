@@ -2,6 +2,40 @@
 
 ---
 
+## v1.4.0
+
+### Improvements
+- **The toolbar button is a plain button again** — the plugin declared three visual variations (the panel, a Settings window and an About window), and the plugin bar renders anything with more than one as a *split* button: two halves in one frame, each taking the hover on its own, with the icon packed against its label instead of spaced like a plain button's. Beside ten plain plugin buttons it read as a defect — the icon looked stuck to the caption, and hovering lit up half a button. The plugin now declares one variation, so its button is a single button with one hover region and the same icon spacing as every other plugin's.
+- **Settings and About moved into the panel** — reached from the gear and the (i) in the panel's status bar, beside Refresh, as views alongside the four tabs. Settings writes through the shared core's config writer and the panel restarts its scan loop as soon as you press **Save**, so a new scan interval takes effect at once instead of at the next reload; **Clear Cache** now also updates the status bar, which reads the same cache it just dropped. `index_setting.html` and `index_about.html` are gone, and `scripts/settings.js` is a view module the panel drives rather than a page with a plugin lifecycle of its own.
+
+### Notes
+- Nothing about the scanning, the rules API or the save block changed in this release.
+
+---
+
+## v1.3.0
+
+### New features
+- **The policy is enforced whether the panel is open or not** — a companion system plugin, **Content Filter Worker**, now runs with every document. It scans on the same interval, highlights every disallowed word in the document itself, and holds the save and the download shut with a message naming the words until they are gone. Nothing is written to the file to do it: the highlight uses the editor's search highlight, so no change is made, nothing is saved and co-authors see nothing.
+- **PDF documents are covered too** — the pdf editor hands a plugin neither its page text nor a way to change it, so a disallowed word there is found through the editor's own search instead: it is highlighted and the save is held shut exactly as elsewhere. The panel lists such a word as report-only — named and highlighted, with no snippet and no **Remove** button, because the fix belongs in the source file — and **Remove all** and the auto-remove countdown skip it rather than reporting a removal that did not happen.
+- **The panel shows the worker's scan** — when a worker is broadcasting, the panel displays what the worker found instead of scanning the document a second time, and asks the worker to rescan on a selection change. With no worker installed nothing arrives and the panel scans for itself exactly as before, so it still works on its own.
+
+### Bug fixes
+- **Presentations scanned as if they were empty** — the slide collector walked `ApiSlide.GetObjectsCount()`/`GetObject()`, neither of which exists, so every scan of a .pptx read 0 characters and reported nothing. It now reads `slide.GetAllDrawings()`, which covers shapes, images, charts, tables (cell by cell) and groups (recursively). Only the slides are read — the presentation's own `GetAllShapes()` would drag in every layout and master, whose placeholder boilerplate is not the user's text and cannot be removed by them.
+
+### Improvements
+- **The endpoint and the tokens can be passed from the editor config** — `editorConfig.plugins.options.all.contentPolicy` now sets the policy service's URL, session and bearer tokens, active account and organization for both the panel and the worker, so pointing a deployment at its own service, or rotating a token, no longer means editing and republishing the plugin. Anything left unset keeps the built-in value, a guid-specific block can override the shared one, and `setPluginsOptions` mid-session makes the worker refetch the rule list instead of waiting for its cache to expire. See `API.md`, “Configuring the endpoint”.
+- **The endpoint, the cache and the scan moved into a shared core** (`scripts/policy-core.js`) — the panel and the worker load the same file, so the rules API, the deployment tokens, the storage keys, the incremental-sync logic, the document collectors and the scan itself exist in one place and cannot drift apart. Roughly 200 lines of the panel script are now that shared file.
+- **Sync is one code path instead of three** — `doFullSync`, `doIncrementalSync` and the cache freshness check collapsed into the core's `syncRules`, which decides for itself whether to ask for everything or only for what changed. Refresh now also tells the worker to refetch.
+- **The scan's own timeout replaced the panel's safety timer** — reading the document answers empty rather than hanging, so the 10-second flag-reset that used to guard `callCommand` is no longer needed.
+
+### Notes
+- Blocking the save needs the editor-side methods this build of the document server provides (`SetContentPolicyBlock`, `HighlightTerms`), and they are reserved for system plugins. On an editor without them the worker still scans and still reports, but cannot hold the save.
+- The drive's half of the enforcement is now specified in `API.md` (“Server-side enforcement”), with a reference implementation in the `scripts` sibling repo (`contentPolicyGuard.js`, wired into `server-local.js`): convert the finished version to text through the document server, match the policy words as case-insensitive substrings, and answer the save callback with a non-zero `error` — storing nothing — when any are present.
+- The block is there to tell the user what is wrong while they can still fix it; it is not the security boundary. In a co-authored document changes reach other clients before any save, so the drive's own save callback is what finally refuses a version that still contains a disallowed word.
+
+---
+
 ## v1.2.1
 
 ### Bug fixes

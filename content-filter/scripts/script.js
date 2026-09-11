@@ -1,5 +1,14 @@
 /*
- * Content Filter Plugin — main script  v1.2.0
+ * Content Filter Plugin — panel script  v1.3.0
+ *
+ * The reviewer's view of the organization's content policy: what the open document contains
+ * that it should not, what the rules are, and what has already been taken out.
+ *
+ * The endpoint, the rules cache and the scan itself live in scripts/policy-core.js, shared
+ * with the Content Filter Worker — the system plugin that runs with every document whether
+ * this panel is open or not, and that does the highlighting and holds the save shut. When a
+ * worker is broadcasting, this panel shows what the worker found and stops scanning on its
+ * own; with no worker installed it scans for itself, exactly as it always did.
  *
  * Auto-scans documents for disallowed/allowed content.
  * - Event-driven: fires on every selection change (initOnSelectionChanged)
@@ -15,46 +24,53 @@
     'use strict';
 
     // ─────────────────────────────────────────────────────────
-    // DEPLOYMENT CONFIGURATION
-    // Set these values once before publishing. All are org-wide —
-    // end users never see or change them.
+    // Shared core  (scripts/policy-core.js, loaded before this file by index.html)
+    //
+    // The endpoint, the deployment tokens, the storage keys, the rules cache, the document
+    // collectors and the scan all live there, so this panel and the worker cannot drift
+    // apart. Nothing the two have in common belongs in this file.
     // ─────────────────────────────────────────────────────────
-    var API_ENDPOINT       = 'https://dev-console.sarv.com/drive-api/v1/external/get-content-policy';
-    var API_SESSION_TOKEN  = '940aeaa25fa9fbb1d79637ac96294394dbe3c87b5cc4d08273c8e95000a8af0e7197f834e2b2f16cb8e15f3614fab2728572';
-    var API_BEARER_TOKEN   = 'your_token_here';   // replace with actual Bearer token
-    var API_ACTIVE_ACCOUNT = '0';
-    var API_ORG_ID         = '';                  // leave empty to infer from Session-Token
+    var core = window.SarvContentPolicy;
+
+    // The Settings view (scripts/settings.js). It reads and writes the stored settings and
+    // knows the form; when to show it, and what to restart once it is saved, is this file's.
+    var settings = window.SarvContentFilterSettings;
+
+    var CACHE_KEY           = core.CACHE_KEY;
+    var REMOVAL_HISTORY_KEY = core.REMOVAL_HISTORY_KEY;
+    var DEFAULT_SCAN_MS     = core.DEFAULT_SCAN_MS;
 
     // ─────────────────────────────────────────────────────────
-    // Constants  (nothing the user changes)
+    // Constants  (this panel's own; nothing the user changes)
     // ─────────────────────────────────────────────────────────
-    var CONFIG_KEY           = 'CONTENT_FILTER_CONFIG';
-    var CACHE_KEY            = 'CONTENT_FILTER_CACHE';
-    var REMOVAL_HISTORY_KEY  = 'CONTENT_FILTER_REMOVAL_HISTORY';
     var MAX_HISTORY_PER_DOC  = 50;            // removal history kept per document
     var MAX_HISTORY_TOTAL    = 500;           // hard cap across all documents in localStorage
-    var DEFAULT_CACHE_HRS    = 24;
-    var DEFAULT_SCAN_MS      = 3000;
+    var WORKER_SILENCE_MS    = 15000;         // a worker quiet for this long is treated as gone
 
     // ─────────────────────────────────────────────────────────
     // State
     // ─────────────────────────────────────────────────────────
-    var rules              = { allowed: [], disallowed: [] };
+    var rules              = core.emptyRules();
     var currentDocId       = 'default';   // set async in init via GetDocumentInfo
     var isSyncing          = false;
     var isScanRunning      = false;
     var isFirstInit        = true;
     var currentViolations  = [];
-    var scanSafetyTimer    = null;   // resets isScanRunning if callCommand never completes
     var lastScanAt         = 0;
     var scanDebounce       = null;
     var countdownInterval  = null;
     var scanIntervalHandle = null;
     var lastSelectedText   = '';     // paragraph/selection text from last init() call
+    var channel            = null;   // link to the worker, when one is installed
+    var lastWorkerScanAt   = 0;      // when the worker last broadcast a result
+
+    function editorType() {
+        return (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
+    }
 
     // Used only by removeWord to pick the right removal API per editor type.
     function isWordEditor() {
-        var t = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
+        var t = editorType();
         return t !== 'cell' && t !== 'slide';
     }
 
@@ -68,37 +84,10 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // Config  (only 4 user-settable values remain)
+    // Config & cache  (both live in the shared core)
     // ─────────────────────────────────────────────────────────
-    function getConfig() {
-        try { return JSON.parse(localStorage.getItem(CONFIG_KEY)) || {}; }
-        catch (e) { return {}; }
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // Cache
-    // ─────────────────────────────────────────────────────────
-    function getCacheEntry() {
-        try { return JSON.parse(localStorage.getItem(CACHE_KEY)) || null; }
-        catch (e) { return null; }
-    }
-    function isCacheValid() {
-        var e = getCacheEntry();
-        if (!e || !e.timestamp || !e.rules) return false;
-        var cfg   = getConfig();
-        var ttlMs = (cfg.cacheTtlHours || DEFAULT_CACHE_HRS) * 3600000;
-        return (Date.now() - e.timestamp) < ttlMs;
-    }
-    function saveCache(rulesData, lastRecordDate) {
-        var entry = { timestamp: Date.now(), rules: rulesData };
-        if (lastRecordDate) entry.lastRecordDate = lastRecordDate;
-        localStorage.setItem(CACHE_KEY, JSON.stringify(entry));
-    }
-    function loadFromCache() {
-        var e = getCacheEntry();
-        if (e && e.rules) { rules = e.rules; return true; }
-        return false;
-    }
+    var getConfig     = core.getConfig;
+    var getCacheEntry = core.readCache;
 
     // ─────────────────────────────────────────────────────────
     // Removal history  (scoped per document + editor type)
@@ -139,209 +128,56 @@
     }
 
     // ─────────────────────────────────────────────────────────
-    // API fetch — POST to Sarv Drive content-policy endpoint
-    //
-    // Request body:
-    //   { organization_id, [since], [userId] }
-    //
-    // Headers (all deploy-time constants above):
-    //   Session-Token, active-account, Authorization, Content-Type
-    //
-    // Returns Promise<{ rules:{allowed,disallowed}, lastRecordDate:string|null }>
-    // ─────────────────────────────────────────────────────────
-    function normalizeRecord(raw) {
-        // Accept both camelCase and snake_case field names from the API
-        var text = String(raw.text || raw.word || raw.phrase || raw.term || '').trim();
-        if (!text) return null;
-        return {
-            text:     text,
-            lower:    text.toLowerCase(),
-            type:     String(raw.type || raw.policy_type || 'disallowed').toLowerCase(),
-            category: String(raw.category || raw.group || ''),
-            date:     String(raw.updatedAt || raw.updated_at || raw.modifiedAt || '')
-        };
-    }
-
-    function fetchAllRules(since) {
-        var payload = { organization_id: API_ORG_ID };
-        if (since) payload.since = since;
-        var userId = (window.Asc.plugin.info && window.Asc.plugin.info.userId) || '';
-        if (userId) payload.userId = userId;
-
-        return fetch(API_ENDPOINT, {
-            method:  'POST',
-            headers: {
-                'Content-Type':   'application/json',
-                'Session-Token':  API_SESSION_TOKEN,
-                'active-account': API_ACTIVE_ACCOUNT,
-                'Authorization':  'Bearer ' + API_BEARER_TOKEN
-            },
-            body: JSON.stringify(payload)
-        })
-        .then(function (res) {
-            if (!res.ok) throw new Error('HTTP ' + res.status + ' ' + res.statusText);
-            return res.json();
-        })
-        .then(function (data) {
-            // Accept: flat array, { data:[…] }, { policies:[…] }, { rules:[…] }
-            var records = Array.isArray(data) ? data
-                : (data.data || data.policies || data.rules || []);
-            var collected = [], maxDate = null;
-            records.forEach(function (raw) {
-                var norm = normalizeRecord(raw);
-                if (!norm) return;
-                collected.push(norm);
-                if (norm.date) {
-                    try {
-                        var d = new Date(norm.date);
-                        if (!isNaN(d.getTime()) && (!maxDate || d > new Date(maxDate)))
-                            maxDate = norm.date;
-                    } catch (_) {}
-                }
-            });
-            return {
-                rules: {
-                    allowed:    collected.filter(function (r) { return r.type === 'allowed'; }),
-                    disallowed: collected.filter(function (r) { return r.type !== 'allowed'; })
-                },
-                lastRecordDate: maxDate
-            };
-        });
-    }
-
-    // ─────────────────────────────────────────────────────────
-    // Merge (incremental sync — keys on lower-cased text)
-    // ─────────────────────────────────────────────────────────
-    function mergeRules(incoming) {
-        var map = {};
-        function add(r) { map[r.lower] = r; }
-        (rules.allowed    || []).forEach(add);
-        (rules.disallowed || []).forEach(add);
-        (incoming.allowed    || []).forEach(add);
-        (incoming.disallowed || []).forEach(add);
-        var all = Object.keys(map).map(function (k) { return map[k]; });
-        rules = {
-            allowed:    all.filter(function (r) { return r.type === 'allowed'; }),
-            disallowed: all.filter(function (r) { return r.type !== 'allowed'; })
-        };
-    }
-
-    // ─────────────────────────────────────────────────────────
     // Sync orchestration
     //
     // On every page load:
     //  1. Serve cached rules instantly (no API wait)
-    //  2. If cache still valid: incremental sync in background
-    //     — only fetches records updated after lastRecordDate
-    //  3. If cache expired: full sync in background
-    //  4. After rules are ready: auto-scan starts
+    //  2. Refresh in the background — the core asks only for what changed when the cache is
+    //     still fresh, and refetches the lot when it is not
+    //  3. After rules are ready: auto-scan starts
+    //
+    // A failure leaves the cached rules in force: a policy that could not be refreshed is
+    // still a policy, and going quiet on a network error would be the wrong way to fail.
     // ─────────────────────────────────────────────────────────
-    function doFullSync(onComplete) {
-        isSyncing = true;
-        updateStatusBar();
-        fetchAllRules(null)
-            .then(function (result) {
-                rules     = result.rules;
-                isSyncing = false;
-                saveCache(result.rules, result.lastRecordDate);
-                updateStatusBar();
-                updateTabBadges();
-                if (onComplete) onComplete();
-            })
-            .catch(function (err) {
-                isSyncing = false;
-                loadFromCache();
-                showError(window.Asc.plugin.tr('Sync failed') + ': ' + (err.message || String(err)));
-                updateStatusBar();
-                if (onComplete) onComplete();
-            });
-    }
-
-    function doIncrementalSync(since) {
-        isSyncing = true;
-        updateStatusBar();
-        fetchAllRules(since)
-            .then(function (result) {
-                var hasNew = (result.rules.allowed.length + result.rules.disallowed.length) > 0;
-                if (hasNew) mergeRules(result.rules);
-                var prev     = getCacheEntry();
-                var prevDate = prev ? prev.lastRecordDate : null;
-                var newDate  = result.lastRecordDate;
-                var bestDate = newDate
-                    ? (!prevDate || new Date(newDate) > new Date(prevDate) ? newDate : prevDate)
-                    : prevDate;
-                saveCache(rules, bestDate);
-                isSyncing = false;
-                updateStatusBar();
-                updateTabBadges();
-            })
-            .catch(function (err) {
-                isSyncing = false;
-                showError(window.Asc.plugin.tr('Sync failed') + ': ' + (err.message || String(err)));
-                updateStatusBar();
-            });
-    }
-
     function syncRules(force, onComplete) {
         if (isSyncing) return;
-        var entry = getCacheEntry();
 
-        if (!force && entry && entry.rules) {
+        var entry = force ? null : getCacheEntry();
+        if (entry && entry.rules) {
             rules = entry.rules;
             updateStatusBar();
             updateTabBadges();
-            if (isCacheValid()) {
-                if (entry.lastRecordDate) doIncrementalSync(entry.lastRecordDate);
-                if (onComplete) onComplete();
-            } else {
-                doFullSync(onComplete);
-            }
-            return;
         }
-        doFullSync(onComplete);
+
+        isSyncing = true;
+        updateStatusBar();
+
+        core.syncRules(rules)
+            .then(function (result) {
+                rules     = result.rules;
+                isSyncing = false;
+                updateStatusBar();
+                updateTabBadges();
+                if (onComplete) onComplete();
+            })
+            .catch(function (err) {
+                isSyncing = false;
+                showError(window.Asc.plugin.tr('Sync failed') + ': ' + (err.message || String(err)));
+                updateStatusBar();
+                if (onComplete) onComplete();
+            });
     }
 
     // ─────────────────────────────────────────────────────────
-    // Scan logic
+    // Scan logic  (the scan itself lives in the shared core)
     // ─────────────────────────────────────────────────────────
-    function escRx(str) { return str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-
-    function getSnippet(text, idx, len) {
-        var pad   = 55;
-        var start = Math.max(0, idx - pad);
-        var end   = Math.min(text.length, idx + len + pad);
-        var out   = text.slice(start, end).replace(/[\r\n\t]+/g, ' ');
-        if (start > 0)         out = '\u2026' + out;
-        if (end < text.length) out = out + '\u2026';
-        return out;
-    }
-
-    function scanText(text) {
-        var allowSet = {};
-        (rules.allowed || []).forEach(function (r) { allowSet[r.lower] = true; });
-        var results = [], seen = {};
-        (rules.disallowed || []).forEach(function (rule) {
-            if (!rule.text) return;
-            var re = new RegExp(escRx(rule.text), 'gi'), m;
-            while ((m = re.exec(text)) !== null) {
-                var lo = m[0].toLowerCase();
-                if (allowSet[lo]) continue;
-                var key = m.index + ':' + lo;
-                if (seen[key]) continue;
-                seen[key] = true;
-                results.push({ matched: m[0], index: m.index, rule: rule,
-                               snippet: getSnippet(text, m.index, m[0].length) });
-            }
-        });
-        results.sort(function (a, b) { return a.index - b.index; });
-        return results;
-    }
+    var escRx    = core.escapeForRegExp;
+    var scanText = function (text) { return core.scanText(text, rules); };
 
     // ─────────────────────────────────────────────────────────
     // Auto-scan  — works for all editor types
     // ─────────────────────────────────────────────────────────
     function onScanDone(docText) {
-        if (scanSafetyTimer) { clearTimeout(scanSafetyTimer); scanSafetyTimer = null; }
         isScanRunning = false;
         setScanIndicator(false);
         updateViolationDisplay(scanText(docText || ''));
@@ -349,83 +185,17 @@
 
     function triggerFullScan() {
         if (isScanRunning) return;
+        // Nothing to scan where a plugin cannot reach the text: the collector would answer ''
+        // and this panel would then paint "no violations" over what the system worker found
+        // through the editor's own search.
+        if (!core.canPluginEditText(editorType())) return;
         isScanRunning = true;
         lastScanAt    = Date.now();
         setScanIndicator(true);
 
-        // Safety net: reset flag after 10 s if callCommand never completes
-        if (scanSafetyTimer) clearTimeout(scanSafetyTimer);
-        scanSafetyTimer = setTimeout(function () {
-            if (isScanRunning) {
-                isScanRunning = false;
-                setScanIndicator(false);
-                if (lastSelectedText) updateViolationDisplay(scanText(lastSelectedText));
-            }
-        }, 10000);
-
-        var et = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
-
-        if (et === 'cell') {
-            // ── Spreadsheet: collect all cell values across all sheets ──
-            runDocCmd(function () {
-                try {
-                    var wb = Api.GetDocument(), parts = [];
-                    var ns = wb.GetSheetsCount ? wb.GetSheetsCount() : 0;
-                    for (var s = 0; s < ns; s++) {
-                        var ws = wb.GetSheet(s);
-                        if (!ws) continue;
-                        var range = ws.GetUsedRange();
-                        if (!range) continue;
-                        var vals = range.GetValue();
-                        if (Array.isArray(vals)) {
-                            vals.forEach(function (row) {
-                                var cells = Array.isArray(row) ? row : [row];
-                                cells.forEach(function (v) {
-                                    if (v !== null && v !== undefined && v !== '') parts.push(String(v));
-                                });
-                            });
-                        }
-                    }
-                    return parts.join(' ');
-                } catch (e) { return ''; }
-            }, onScanDone);
-
-        } else if (et === 'slide') {
-            // ── Presentation: collect text from all shapes on all slides ──
-            runDocCmd(function () {
-                try {
-                    var pres = Api.GetPresentation(), parts = [];
-                    var ns = pres.GetSlidesCount ? pres.GetSlidesCount() : 0;
-                    for (var s = 0; s < ns; s++) {
-                        var slide = pres.GetSlide(s);
-                        var no = slide.GetObjectsCount ? slide.GetObjectsCount() : 0;
-                        for (var i = 0; i < no; i++) {
-                            var shape = slide.GetObject(i);
-                            if (!shape || typeof shape.GetDocContent !== 'function') continue;
-                            var doc = shape.GetDocContent();
-                            if (!doc) continue;
-                            var np = doc.GetElementsCount ? doc.GetElementsCount() : 0;
-                            for (var p = 0; p < np; p++) {
-                                var para = doc.GetElement(p);
-                                if (para && typeof para.GetText === 'function') parts.push(para.GetText());
-                            }
-                        }
-                    }
-                    return parts.join('\n');
-                } catch (e) { return ''; }
-            }, onScanDone);
-
-        } else {
-            // ── Word / PDF: iterate document paragraphs ──
-            runDocCmd(function () {
-                var parts = [], oDoc = Api.GetDocument(), n = oDoc.GetElementsCount();
-                for (var i = 0; i < n; i++) {
-                    var elem = oDoc.GetElement(i);
-                    if (elem && typeof elem.GetText === 'function') parts.push(elem.GetText());
-                }
-                return parts.join('\n');
-            }, onScanDone);
-        }
+        // The core picks the collector for this editor and carries its own timeout, answering
+        // '' rather than hanging - so the safety timer this used to need has gone with it.
+        core.collectDocumentText(editorType(), 10000).then(onScanDone);
     }
 
     function triggerSelectedScan(text) {
@@ -435,12 +205,15 @@
 
     function startAutoScan() {
         triggerFullScan();
-        // Interval fallback: catches edits where cursor doesn't move
+        // Interval fallback: catches edits where the cursor doesn't move. Skipped entirely
+        // while a worker is broadcasting - it is already scanning the same document, and two
+        // scanners would only fight over callCommand.
         var cfg      = getConfig();
         var interval = cfg.scanIntervalMs !== undefined ? cfg.scanIntervalMs : DEFAULT_SCAN_MS;
         if (interval > 0) {
             if (scanIntervalHandle) clearInterval(scanIntervalHandle);
             scanIntervalHandle = setInterval(function () {
+                if (isWorkerLive()) return;
                 if (!isScanRunning && (Date.now() - lastScanAt) > Math.max(interval - 500, 1500))
                     triggerFullScan();
             }, interval);
@@ -477,6 +250,15 @@
         }
     }
 
+    /**
+     * The violations this panel can take out of the document. A word the editor's own search
+     * reported carries no location (index -1) and belongs to a file whose text a plugin cannot
+     * rewrite, so removal - manual or automatic - would spin forever on a call that does nothing.
+     */
+    function removableViolations(violations) {
+        return violations.filter(function (v) { return v.index >= 0; });
+    }
+
     function getUniqueWords(violations) {
         var seen = {}, words = [];
         violations.forEach(function (v) {
@@ -491,7 +273,13 @@
         removeWord(words[idx], function () { removeWordsSequential(words, idx + 1, onDone); });
     }
 
-    function executeRemoval(violations, source) {
+    function executeRemoval(allViolations, source) {
+        // Only what this panel can actually take out; a reported-only word (see
+        // removableViolations) would otherwise be counted as removed while it is still there.
+        var violations = removableViolations(allViolations);
+        var remaining  = allViolations.filter(function (v) { return violations.indexOf(v) === -1; });
+        if (!violations.length) return;
+
         var words        = getUniqueWords(violations);
         var wordsWithMeta = words.map(function (w) {
             var v = null;
@@ -508,8 +296,8 @@
             D.removingStatus.classList.add('display-none');
             setButtonsEnabled(true);
             addToRemovalHistory(wordsWithMeta, source);
-            currentViolations = [];
-            updateViolationDisplay([]);
+            currentViolations = remaining;
+            updateViolationDisplay(remaining);
             updateTabBadges();
             // Refresh Removed tab if visible
             if (D.tabRemovedPane && !D.tabRemovedPane.classList.contains('display-none'))
@@ -591,6 +379,13 @@
         D.tabRemovedPane  = document.getElementById('tab-removed');
         D.listRemoved     = document.getElementById('list-removed');
         D.btnClearHistory = document.getElementById('btn-clear-history');
+        // Settings pane
+        D.btnSettings     = document.getElementById('btn-settings');
+        D.btnSaveSettings = document.getElementById('btn-save-settings');
+        D.btnClearCache   = document.getElementById('btn-clear-cache');
+        D.settingsSaved   = document.getElementById('settings-saved');
+        // About pane
+        D.btnAbout        = document.getElementById('btn-about');
         isDomReady = true;
     }
 
@@ -602,6 +397,7 @@
     }
 
     var errorTimer = null;
+    var savedNoteTimer = null;
     function showError(msg) {
         D.errorMsg.textContent = msg;
         D.errorMsg.classList.remove('display-none');
@@ -659,6 +455,10 @@
     function updateViolationDisplay(violations) {
         currentViolations = violations;
 
+        // Report-only violations (a pdf, say) leave nothing for Remove all to press.
+        if (D.btnRemoveAll)
+            D.btnRemoveAll.disabled = removableViolations(violations).length === 0;
+
         // Only stop the countdown when violations are gone.
         // Do NOT stop it on every scan update — initOnSelectionChanged fires on
         // every cursor move, so unconditionally stopping here caused the countdown
@@ -695,18 +495,29 @@
             D.resultsList.innerHTML = violations.map(function (v) {
                 var catHtml = v.rule.category
                     ? '<span class="v-cat">' + esc(v.rule.category) + '</span>' : '';
-                var escapedSnip = esc(v.snippet).replace(
-                    new RegExp('(' + escRx(esc(v.matched)) + ')', 'gi'), '<mark>$1</mark>');
-                var removeBtn = '<button class="btn-remove" data-word="' + esc(v.matched) + '">' +
-                    window.Asc.plugin.tr('Remove') + '</button>';
+                // index -1 is a word the editor's own search found without handing over its
+                // surroundings (see core.detectWithEditorSearch) - there is no snippet to show
+                // and no text this panel could take out, so the row names the word and says
+                // where the fix belongs instead of offering a button that cannot work.
+                var isLocated = v.index >= 0;
+                var bodyHtml  = isLocated
+                    ? '<div class="v-snippet">' + esc(v.snippet).replace(
+                        new RegExp('(' + escRx(esc(v.matched)) + ')', 'gi'), '<mark>$1</mark>') + '</div>'
+                    : '<div class="v-snippet v-snippet-empty">' +
+                        window.Asc.plugin.tr('Highlighted in the document. This file type cannot be edited here - fix it in the source file.') +
+                        '</div>';
+                var removeBtn = isLocated
+                    ? '<button class="btn-remove" data-word="' + esc(v.matched) + '">' +
+                        window.Asc.plugin.tr('Remove') + '</button>'
+                    : '';
                 return '<div class="v-item">' +
                     '<div class="v-header"><span class="v-word">' + esc(v.matched) + '</span>' +
-                    catHtml + removeBtn + '</div>' +
-                    '<div class="v-snippet">' + escapedSnip + '</div></div>';
+                    catHtml + removeBtn + '</div>' + bodyHtml + '</div>';
             }).join('');
 
-            // Only start a fresh countdown if one isn't already ticking.
-            if (!countdownInterval) startCountdown(violations);
+            // Only start a fresh countdown if one isn't already ticking, and only over the
+            // violations that can actually be removed.
+            if (!countdownInterval) startCountdown(removableViolations(violations));
         }
     }
 
@@ -766,6 +577,7 @@
         if (name === 'disallowed') renderDisallowedTab(D.searchDis.value);
         if (name === 'allowed')    renderAllowedTab(D.searchAll.value);
         if (name === 'removed')    renderRemovedTab();
+        if (name === 'settings')   settings.populate();
     }
 
     // ─────────────────────────────────────────────────────────
@@ -775,8 +587,10 @@
         D.btnRefresh.addEventListener('click', function () {
             stopCountdown();
             localStorage.removeItem(CACHE_KEY);
-            rules = { allowed: [], disallowed: [] };
-            doFullSync(function () { startAutoScan(); });
+            rules = core.emptyRules();
+            syncRules(true, function () { startAutoScan(); });
+            // The worker holds its own copy of the rules, so it has to be told to refetch.
+            publishToWorker({ type: 'rulesChanged' });
         });
 
         D.btnScanDoc.addEventListener('click', function () {
@@ -790,6 +604,30 @@
         });
 
         D.btnCancelCD.addEventListener('click', stopCountdown);
+
+        // Settings and About are views of this panel, reached from the status bar. They are
+        // panes like the tabs are, so showTab already knows how to put one up and take it
+        // down again - a tab click leaves them the same way it leaves any other pane.
+        D.btnSettings.addEventListener('click', function () { showTab('settings'); });
+        D.btnAbout.addEventListener('click', function () { showTab('about'); });
+
+        D.btnSaveSettings.addEventListener('click', function () {
+            var saved = settings.save();
+            // The scan loop holds the old interval, so it has to be restarted to pick the
+            // new one up; saving is otherwise invisible until the panel is reopened.
+            startAutoScan();
+            if (!saved.autoRemoveDelay) stopCountdown();
+            D.settingsSaved.classList.remove('display-none');
+            if (savedNoteTimer) clearTimeout(savedNoteTimer);
+            savedNoteTimer = setTimeout(function () {
+                D.settingsSaved.classList.add('display-none');
+            }, 3000);
+        });
+
+        D.btnClearCache.addEventListener('click', function () {
+            settings.clearCache();
+            updateStatusBar();
+        });
 
         // Tab switching
         D.tabBar.addEventListener('click', function (e) {
@@ -885,9 +723,56 @@
         }
 
         // ── Pass 2: debounced full-document scan via callCommand ──
-        // Overrides pass-1 results with complete document coverage once ready.
+        // Overrides pass-1 results with complete document coverage once ready. A live worker
+        // is already scanning the same document, so it is asked to scan now instead.
         if (scanDebounce) clearTimeout(scanDebounce);
-        scanDebounce = setTimeout(triggerFullScan, 1500);
+        scanDebounce = setTimeout(function () {
+            if (isWorkerLive()) publishToWorker({ type: 'requestScan' });
+            else                triggerFullScan();
+        }, 1500);
+    }
+
+    // ─────────────────────────────────────────────────────────
+    // Worker channel
+    //
+    // The Content Filter Worker is a system plugin: the editor runs it with every document,
+    // open panel or not, and it is the half that highlights the words and holds the save
+    // shut. It broadcasts every result it gets, so when one is present this panel displays
+    // the worker's scan rather than duplicating it.
+    //
+    // Both halves are served from the same origin, which is what lets a BroadcastChannel
+    // reach from one hidden iframe to the other. Where there is no worker - or no
+    // BroadcastChannel - nothing arrives, isWorkerLive() stays false and the panel keeps
+    // scanning for itself.
+    // ─────────────────────────────────────────────────────────
+    function isWorkerLive() {
+        return (Date.now() - lastWorkerScanAt) < WORKER_SILENCE_MS;
+    }
+
+    function publishToWorker(message) {
+        if (!channel || !channel.supported) return false;
+        message.channel = core.CHANNEL_NAME;
+        return channel.publish(message);
+    }
+
+    function onWorkerMessage(message) {
+        if (!message || message.channel !== core.CHANNEL_NAME) return;
+        if (message.type !== 'scan') return;   // requests are the worker's to answer, not ours
+
+        lastWorkerScanAt = Date.now();
+
+        // The worker scanned the whole document with the same rules and the same core, so its
+        // violations are this panel's violations. Its own scan is left running as the fallback
+        // for the moment the worker stops answering.
+        setScanIndicator(false);
+        updateViolationDisplay(message.violations || []);
+    }
+
+    function initChannel() {
+        channel = core.openChannel(onWorkerMessage);
+        // Asks any worker already running to say what it last found, so a panel opened
+        // mid-session shows the current state instead of waiting for the next scan.
+        publishToWorker({ type: 'requestState' });
     }
 
     // ─────────────────────────────────────────────────────────
@@ -899,6 +784,7 @@
             initDom();
             bindEvents();
             setupBeforeUnload();
+            initChannel();
             // Resolve document identity first so history is correctly scoped,
             // then load rules and start scanning.
             initDocId(function () {
@@ -913,6 +799,7 @@
     window.Asc.plugin.onTranslate = function () {
         if (!isDomReady) return;
         updateStatusBar();
+        settings.refreshCacheInfo();
     };
 
 })();

@@ -2,12 +2,18 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Content Filter</title>
+    <title>Sarv Content Filter</title>
     <link rel="stylesheet" href="https://sarv.github.io/sarv-editors-plugins/v1/plugins.css">
     <link rel="stylesheet" href="styles/style.css">
     <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins.js"></script>
     <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugins-ui.js"></script>
     <script type="text/javascript" src="https://sarv.github.io/sarv-editors-plugins/v1/plugin-theme.js"></script>
+    <!-- The rules API, the cache and the scan. The Content Filter Worker loads this same
+         file from here, so the two halves cannot drift. Must come before script.js. -->
+    <script type="text/javascript" src="scripts/policy-core.js"></script>
+    <!-- The Settings view. A view of this panel, not a page of its own: the plugin has a
+         single variation, so there is no modal and no toolbar dropdown to open one from. -->
+    <script type="text/javascript" src="scripts/settings.js"></script>
     <script src="scripts/script.js"></script>
 </head>
 <body>
@@ -19,7 +25,7 @@
 
         <!-- Plugin description -->
         <div class="plugin-desc-bar">
-            <strong>Content Filter</strong> — scans documents for disallowed words and phrases based on your organization's rules.
+            <strong>Sarv Content Filter</strong> — scans documents for disallowed words and phrases based on your organization's rules.
         </div>
 
         <!-- Status bar -->
@@ -29,7 +35,9 @@
                 <div id="sync-status"></div>
                 <div id="last-sync"></div>
             </div>
-            <button id="btn-refresh" class="btn-text-default" title="Refresh rules">&#8635;</button>
+            <button id="btn-refresh" class="btn-text-default status-tool" title="Refresh rules">&#8635;</button>
+            <button id="btn-settings" class="btn-text-default status-tool" title="Settings">&#9881;</button>
+            <button id="btn-about" class="btn-text-default status-tool" title="About">&#9432;</button>
         </div>
 
         <!-- Violation warning bar (always visible when violations exist) -->
@@ -122,6 +130,65 @@
             </div>
             <div id="list-removed" class="rule-list"></div>
         </div>
+
+        <!-- ── Settings pane ──────────────────────── -->
+        <div id="tab-settings" class="tab-pane display-none">
+
+            <div class="settings-section">
+                <div class="settings-section-title i18n">Behavior</div>
+
+                <div class="settings-grid">
+                    <div class="field-group">
+                        <label class="field-label i18n" for="f-auto-remove">Auto-Remove Delay (seconds)</label>
+                        <input type="number" id="f-auto-remove" class="form-control" min="0" max="300">
+                        <div class="field-hint i18n">
+                            Countdown before violations are auto-removed. Set to 0 to disable auto-remove.
+                        </div>
+                    </div>
+                    <div class="field-group">
+                        <label class="field-label i18n" for="f-scan-interval">Scan Interval (ms)</label>
+                        <input type="number" id="f-scan-interval" class="form-control" min="1000" max="30000">
+                        <div class="field-hint i18n">
+                            How often the document is re-scanned in the background. Default: 3000.
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="settings-section">
+                <div class="settings-section-title i18n">Cache</div>
+
+                <div class="settings-grid">
+                    <div class="field-group">
+                        <label class="field-label i18n" for="f-cache-hours">Cache Duration (hours)</label>
+                        <input type="number" id="f-cache-hours" class="form-control" min="1" max="720">
+                        <div class="field-hint i18n">Full re-sync after this many hours. Default: 24.</div>
+                    </div>
+                </div>
+                <div class="settings-actions">
+                    <button id="btn-clear-cache" class="btn-text-default i18n">Clear Cache</button>
+                </div>
+                <div id="cache-info"></div>
+            </div>
+
+            <div class="settings-actions settings-footer">
+                <button id="btn-save-settings" class="btn-text-default i18n">Save</button>
+                <span id="settings-saved" class="settings-saved display-none i18n">Settings saved</span>
+            </div>
+
+        </div><!-- /#tab-settings -->
+
+        <!-- ── About pane ─────────────────────────── -->
+        <div id="tab-about" class="tab-pane display-none">
+            <div id="about-outer">
+                <div class="about-name i18n">Sarv Content Filter</div>
+                <div class="about-ver">v1.4.0</div>
+                <div class="about-desc i18n">
+                    Scans documents for allowed and disallowed words and phrases
+                    using rule lists fetched from a configurable API.
+                </div>
+            </div>
+        </div><!-- /#tab-about -->
 
     </div><!-- /#main-panel -->
 

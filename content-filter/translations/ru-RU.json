@@ -1,5 +1,5 @@
 {
-    "Configure Content Filter": "Настройка фильтра контента",
+    "Configure Sarv Content Filter": "Настройка фильтра контента Sarv",
     "Enter your API URL to load allowed and disallowed content rules. Open Settings for advanced field mapping and cache options.": "Введите URL вашего API для загрузки правил разрешённого и запрещённого контента. Откройте Настройки для расширенных параметров сопоставления полей и кэша.",
     "API URL": "URL API",
     "API Key": "Ключ API",
@@ -28,6 +28,6 @@
     "No cache": "Нет кэша",
     "Cache": "Кэш",
     "Clear Cache": "Очистить кэш",
-    "Content Filter": "Фильтр контента",
+    "Sarv Content Filter": "Фильтр контента Sarv",
     "Scans documents for allowed and disallowed words and phrases using rule lists fetched from a configurable API.": "Сканирует документы на наличие разрешённых и запрещённых слов и фраз, используя списки правил из настраиваемого API."
 }
