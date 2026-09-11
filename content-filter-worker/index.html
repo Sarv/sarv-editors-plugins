@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Content Filter Worker</title>
+    <!-- Relative so the same file works from GitHub Pages and from the local dev server. -->
+    <script type="text/javascript" src="../v1/plugins.js"></script>
+    <!-- The rules API, the cache and the scan are shared with the Content Filter panel; the two
+         plugins are served side by side from the same origin, so one copy serves both. -->
+    <script type="text/javascript" src="../content-filter/scripts/policy-core.js"></script>
+    <script type="text/javascript" src="scripts/worker.js"></script>
+</head>
+<body>
+<!--
+  Background worker. This variation is declared isSystem/isVisual:false, so the editor loads it
+  into a hidden off-screen iframe and never shows this markup. Everything it does is driven by
+  the scan loop in scripts/worker.js.
+-->
+</body>
+</html>

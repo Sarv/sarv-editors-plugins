@@ -64,6 +64,7 @@ The dev server re-reads each plugin's `config.json` on every request, so changes
 | **Bergamot Translator** | Offline machine translation powered by Bergamot — privacy-friendly, works without internet. |
 | **Chess** | Play chess with other collaborators right in the editors. |
 | **Content Filter** | Scan documents for allowed and disallowed content using rule lists fetched from your API. |
+| **Content Filter Worker** | Enforces the same rules in the background: highlights every disallowed word and blocks the save until it is gone. No interface. |
 | **CVbuilder** | A resume generation plugin, aiming to help users swiftly create resumes. |
 | **Date Picker** | Insert formatted dates into cells. |
 | **DeepL** | Translate the selected text into other languages using DeepL. |

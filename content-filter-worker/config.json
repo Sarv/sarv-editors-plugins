@@ -1,0 +1,74 @@
+{
+    "name": "Sarv Content Filter Worker",
+    "enabled": true,
+    "nameLocale": {
+        "ru": "Фильтр контента Sarv — фоновая служба",
+        "fr": "Filtre de contenu Sarv — service de fond",
+        "es": "Filtro de contenido Sarv — servicio en segundo plano",
+        "de": "Sarv Inhaltsfilter — Hintergrunddienst",
+        "zh-ZH": "Sarv 内容过滤器后台服务",
+        "pt-BR": "Filtro de conteúdo Sarv — serviço em segundo plano"
+    },
+    "guid": "asc.{C3D8B617-4E92-4B7A-9F51-6A2D0C8E4B73}",
+    "version": "1.0.0",
+    "minVersion": "7.4.0",
+
+    "variations": [
+        {
+            "description": "Enforces the organization's content policy in the background: scans the document, highlights any disallowed word and holds the save shut until it is gone. No interface - the Content Filter panel is where a reviewer sees what was found.",
+            "descriptionLocale": {
+                "ru": "Применяет политику контента организации в фоновом режиме: сканирует документ, выделяет запрещённые слова и блокирует сохранение, пока они не удалены. Без интерфейса.",
+                "fr": "Applique la politique de contenu de l'organisation en arrière-plan : analyse le document, met en évidence les mots interdits et bloque l'enregistrement jusqu'à leur suppression. Sans interface.",
+                "es": "Aplica la política de contenido de la organización en segundo plano: analiza el documento, resalta las palabras no permitidas y bloquea el guardado hasta que se eliminen. Sin interfaz.",
+                "de": "Setzt die Inhaltsrichtlinie der Organisation im Hintergrund durch: durchsucht das Dokument, hebt verbotene Wörter hervor und blockiert das Speichern, bis sie entfernt sind. Ohne Oberfläche.",
+                "zh-ZH": "在后台执行组织的内容策略：扫描文档、高亮显示禁用词，并在其被删除前阻止保存。无界面。",
+                "pt-BR": "Aplica a política de conteúdo da organização em segundo plano: verifica o documento, destaca palavras não permitidas e bloqueia o salvamento até que sejam removidas. Sem interface."
+            },
+            "url": "index.html",
+            "icons": ["resources/light/icon.png", "resources/light/icon@2x.png"],
+            "icons2": [
+                {
+                    "theme": "flat",
+                    "style": "light",
+                    "100%":    { "normal": "resources/light/icon.png" },
+                    "125%":    { "normal": "resources/light/icon@1.25x.png" },
+                    "150%":    { "normal": "resources/light/icon@1.5x.png" },
+                    "175%":    { "normal": "resources/light/icon@1.75x.png" },
+                    "200%":    { "normal": "resources/light/icon@2x.png" },
+                    "default": { "normal": "resources/light/icon.png" }
+                },
+                {
+                    "theme": "flatDark",
+                    "style": "dark",
+                    "100%":    { "normal": "resources/dark/icon.png" },
+                    "125%":    { "normal": "resources/dark/icon@1.25x.png" },
+                    "150%":    { "normal": "resources/dark/icon@1.5x.png" },
+                    "175%":    { "normal": "resources/dark/icon@1.75x.png" },
+                    "200%":    { "normal": "resources/dark/icon@2x.png" },
+                    "default": { "normal": "resources/dark/icon.png" }
+                }
+            ],
+
+            "isSystem": true,
+            "isVisual": false,
+            "isModal": false,
+            "isInsideMode": false,
+            "isViewer": true,
+            "isDisplayedInViewer": false,
+            "EditorsSupport": ["word", "cell", "slide", "pdf"],
+
+            "initDataType": "none",
+            "initData": "",
+            "isUpdateOleOnResize": false,
+
+            "store": {
+                "background": { "light": "#2E5BBA", "dark": "#2E5BBA" },
+                "screenshots": [],
+                "icons": { "light": "resources/light", "dark": "resources/dark" },
+                "categories": ["specAbilities", "work"]
+            }
+        }
+    ],
+
+    "onlyofficeScheme": true
+}
