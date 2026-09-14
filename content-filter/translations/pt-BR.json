@@ -18,6 +18,8 @@
     "Never synced": "Nunca sincronizado",
     "No violations found": "Nenhuma violação encontrada",
     "violation(s) found": "violação(ões) encontrada(s)",
+    "disallowed term(s) found": "termo(s) não permitido(s) encontrado(s)",
+    "occurrence(s)": "ocorrência(s)",
     "No text to scan. Select text or choose Scan Document.": "Sem texto para verificar. Selecione texto ou escolha Verificar documento.",
     "API URL not configured. Open Settings first.": "URL da API não configurada. Abra as Configurações primeiro.",
     "Sync failed": "Falha na sincronização",

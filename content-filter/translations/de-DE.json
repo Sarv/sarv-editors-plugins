@@ -19,6 +19,8 @@
     "Refresh rules": "Regeln aktualisieren",
     "No violations found": "Keine Verstöße gefunden",
     "violation(s) found": "Verstoß/Verstöße gefunden",
+    "disallowed term(s) found": "unzulässige(r) Begriff(e) gefunden",
+    "occurrence(s)": "Vorkommen",
     "No text to scan. Select text or choose Scan Document.": "Kein Text zum Scannen. Wählen Sie Text aus oder wählen Sie Dokument scannen.",
     "Rules not loaded yet. Click ↻ to sync.": "Regeln noch nicht geladen. Klicken Sie ↻ zum Synchronisieren.",
     "Select all content (Ctrl+A) and try Scan Selection, or use Scan Document in a text document.": "Wählen Sie alle Inhalte aus (Strg+A) und versuchen Sie Auswahl scannen, oder verwenden Sie Dokument scannen in einem Textdokument.",

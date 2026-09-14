@@ -241,3 +241,30 @@ sidebar panel is not):
 | `ClearHighlightTerms()` | Takes the highlight off. |
 | `SetContentPolicyBlock(reason)` | Refuses `asc_Save` and every download while `reason` is set, reporting `reason` verbatim to the user; pass an empty value to lift it. Owned by the calling plugin, so one holder cannot clear another's. |
 | `GetContentPolicyBlock()` | The reason in force, or `null`. Readable by **any** plugin, so a panel can explain a block another plugin set. |
+| `GetHighlightTermsCount()` | How many matches the highlight is currently painting. The editor drops its search results whenever the document is recalculated, which is every edit, so this is how the worker knows its highlight is gone and has to be painted again. |
+
+## What the scan reads
+
+The worker highlights and holds the save on the words its own read of the document finds, so the
+read has to cover everywhere the editor's search engine looks — a region it cannot read is a
+region a banned word saves out of. `collectDocumentText(editorType)` in
+`scripts/policy-core.js` is that read, and every region it returns is joined with a newline so
+no phrase can be matched across the seam between two of them (`top` in one cell and `secret` in
+the next must not read as `top secret`).
+
+| Editor | Read | Not read |
+|---|---|---|
+| Text document (`word`) | The body with its tables, nested tables included; every section's headers and footers of all three types; every footnote and endnote; the text inside every shape and text box, in the body and in the headers and footers | Comments, and a layout's or master's boilerplate — the editor's own search does not look there either |
+| Presentation (`slide`) | Every slide's shapes, tables (cell by cell) and groups (recursively), and the speaker-notes page | Layouts and masters, whose placeholder text is not the user's and cannot be removed by them |
+| Spreadsheet (`cell`) | Every sheet's used range, cell by cell, and the text inside every shape and text box | — |
+| PDF (`pdf`) | Nothing: a plugin reaches neither the page text nor an edit. The engine's own search reads it instead (`detectWithEditorSearch`), which highlights as it counts | — |
+
+Two kinds of match come back from a scan:
+
+- **Located** — with a position and a snippet. The panel shows the surrounding text and can take
+  the word out, because the editor's search-and-replace reaches wherever the scan read it.
+- **Report-only** — `index: -1` and no snippet. The word is named in the message that holds the
+  save, but the panel offers no **Remove** button and the auto-remove countdown skips it. Two
+  things produce these: a pdf, whose text a plugin cannot rewrite, and a **spreadsheet's text
+  boxes** — the spreadsheet's search engine walks cells rather than runs, so a word inside a
+  shape there can be neither highlighted nor replaced. Everything else a scan finds is located.

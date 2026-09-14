@@ -20,7 +20,7 @@
         "pt-BR": "Filtro de conteúdo"
     },
     "guid": "asc.{A7F3D421-8C5B-4E9F-B2A6-1D8E7C3F5A90}",
-    "version": "1.4.0",
+    "version": "1.5.0",
     "variations": [
         {
           "description": "Scan documents for allowed and disallowed content using rule lists fetched from your API.",

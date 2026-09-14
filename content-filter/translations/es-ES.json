@@ -18,6 +18,8 @@
     "Never synced": "Nunca sincronizado",
     "No violations found": "No se encontraron infracciones",
     "violation(s) found": "infracción(es) encontrada(s)",
+    "disallowed term(s) found": "término(s) no permitido(s) encontrado(s)",
+    "occurrence(s)": "apariciones",
     "No text to scan. Select text or choose Scan Document.": "Sin texto para escanear. Seleccione texto o elija Escanear documento.",
     "Rules not loaded yet. Click ↻ to sync.": "Reglas aún no cargadas. Haga clic en ↻ para sincronizar.",
     "API URL not configured. Open Settings first.": "URL de API no configurada. Abra Configuración primero.",

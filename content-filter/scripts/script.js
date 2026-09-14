@@ -51,7 +51,9 @@
     // State
     // ─────────────────────────────────────────────────────────
     var rules              = core.emptyRules();
-    var currentDocId       = 'default';   // set async in init via GetDocumentInfo
+    // Which document is open - resolved async in init. Empty until then, so a message that
+    // arrives first is judged on its editor type rather than against a placeholder key.
+    var currentDocId       = '';
     var isSyncing          = false;
     var isScanRunning      = false;
     var isFirstInit        = true;
@@ -465,7 +467,13 @@
         // to reset to the full delay on each keystroke/cursor move.
         if (violations.length === 0) stopCountdown();
 
-        var count = violations.length;
+        // One word used four times is one thing to fix, not four - and Remove takes out every
+        // occurrence of it in one press - so the list, the badge and the warning all count
+        // distinct words, with the number of occurrences carried on the word's own row.
+        var groups      = core.groupViolations(violations);
+        var count       = groups.length;
+        var occurrences = violations.length;
+
         D.badgeViol.textContent = count || '';
         D.badgeViol.classList.toggle('display-none', count === 0);
         D.badgeViol.classList.toggle('has-violations', count > 0);
@@ -490,29 +498,36 @@
             D.resultSummary.className = 'result-summary violation';
             D.resultSummary.innerHTML =
                 '<span class="summary-icon">&#9888;</span> ' +
-                count + '\u00a0' + window.Asc.plugin.tr('violation(s) found');
+                count + '\u00a0' + window.Asc.plugin.tr('disallowed term(s) found') +
+                (occurrences > count
+                    ? ' <span class="summary-note">' + occurrences + '\u00a0' +
+                        window.Asc.plugin.tr('occurrence(s)') + '</span>'
+                    : '');
 
-            D.resultsList.innerHTML = violations.map(function (v) {
-                var catHtml = v.rule.category
-                    ? '<span class="v-cat">' + esc(v.rule.category) + '</span>' : '';
+            D.resultsList.innerHTML = groups.map(function (group) {
+                var first   = group.occurrences[0];
+                var catHtml = group.rule.category
+                    ? '<span class="v-cat">' + esc(group.rule.category) + '</span>' : '';
+                var cntHtml = group.count > 1
+                    ? '<span class="v-count">(' + group.count + ')</span>' : '';
                 // index -1 is a word the editor's own search found without handing over its
                 // surroundings (see core.detectWithEditorSearch) - there is no snippet to show
                 // and no text this panel could take out, so the row names the word and says
                 // where the fix belongs instead of offering a button that cannot work.
-                var isLocated = v.index >= 0;
+                var isLocated = first.index >= 0;
                 var bodyHtml  = isLocated
-                    ? '<div class="v-snippet">' + esc(v.snippet).replace(
-                        new RegExp('(' + escRx(esc(v.matched)) + ')', 'gi'), '<mark>$1</mark>') + '</div>'
+                    ? '<div class="v-snippet">' + esc(first.snippet).replace(
+                        new RegExp('(' + escRx(esc(group.matched)) + ')', 'gi'), '<mark>$1</mark>') + '</div>'
                     : '<div class="v-snippet v-snippet-empty">' +
                         window.Asc.plugin.tr('Highlighted in the document. This file type cannot be edited here - fix it in the source file.') +
                         '</div>';
                 var removeBtn = isLocated
-                    ? '<button class="btn-remove" data-word="' + esc(v.matched) + '">' +
+                    ? '<button class="btn-remove" data-word="' + esc(group.matched) + '">' +
                         window.Asc.plugin.tr('Remove') + '</button>'
                     : '';
                 return '<div class="v-item">' +
-                    '<div class="v-header"><span class="v-word">' + esc(v.matched) + '</span>' +
-                    catHtml + removeBtn + '</div>' + bodyHtml + '</div>';
+                    '<div class="v-header"><span class="v-word">' + esc(group.matched) + '</span>' +
+                    cntHtml + catHtml + removeBtn + '</div>' + bodyHtml + '</div>';
             }).join('');
 
             // Only start a fresh countdown if one isn't already ticking, and only over the
@@ -678,7 +693,8 @@
     function setupBeforeUnload() {
         window.addEventListener('beforeunload', function (e) {
             if (currentViolations.length > 0) {
-                var msg = currentViolations.length +
+                // Distinct words, to match what the panel and the warning bar say.
+                var msg = core.groupViolations(currentViolations).length +
                     ' disallowed term(s) found in document. Please remove them before closing.';
                 e.returnValue = msg;
                 return msg;
@@ -688,25 +704,25 @@
 
     // ─────────────────────────────────────────────────────────
     // Document identity
-    // Builds a stable key  "<editorType>:<sanitised-title>"  so history
-    // is stored per file+product combination.
-    // GetDocumentInfo is async; everything that uses currentDocId must
-    // run inside the callback (startAutoScan, updateTabBadges etc.)
+    //
+    // Names the open document, and does it the same way the worker does - the two have to
+    // agree on it, because it is also what tells this panel's worker apart from the worker of
+    // whatever is open in the next tab (see core.documentKey). It scopes the removal history
+    // as well, so a word taken out of a presentation is not listed under a text document.
+    //
+    // Resolving it is async; everything that uses currentDocId must run inside the callback
+    // (startAutoScan, updateTabBadges etc.)
     // ─────────────────────────────────────────────────────────
     function initDocId(callback) {
-        var et = (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || 'doc';
-        try {
-            window.Asc.plugin.executeMethod('GetDocumentInfo', null, function (info) {
-                var title = (info && (info.title || info.fileName || info.name)) || '';
-                // Keep only safe chars, max 48 chars so the key stays readable
-                var slug  = title.toLowerCase().replace(/[^a-z0-9._-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
-                currentDocId = et + ':' + (slug || 'default');
+        core.documentKey()
+            .then(function (key) {
+                currentDocId = key || editorType() || 'doc';
+                callback();
+            })
+            .catch(function () {
+                currentDocId = editorType() || 'doc';
                 callback();
             });
-        } catch (e) {
-            currentDocId = et + ':default';
-            callback();
-        }
     }
 
     // ─────────────────────────────────────────────────────────
@@ -751,13 +767,23 @@
 
     function publishToWorker(message) {
         if (!channel || !channel.supported) return false;
-        message.channel = core.CHANNEL_NAME;
+        message.channel     = core.CHANNEL_NAME;
+        // Stamped so only this document's worker answers - every other tab of the same origin
+        // is listening on the same channel.
+        message.documentKey = currentDocId;
+        message.editorType  = editorType();
         return channel.publish(message);
     }
 
     function onWorkerMessage(message) {
         if (!message || message.channel !== core.CHANNEL_NAME) return;
         if (message.type !== 'scan') return;   // requests are the worker's to answer, not ours
+
+        // A BroadcastChannel carries to every tab of this origin, so a result has to be checked
+        // against the document it is about before it is believed. Without this a panel watching
+        // a text document lists - and counts, and offers to remove - the words the presentation
+        // open in the next tab happens to hold.
+        if (!core.isSameDocument(currentDocId, message, editorType())) return;
 
         lastWorkerScanAt = Date.now();
 

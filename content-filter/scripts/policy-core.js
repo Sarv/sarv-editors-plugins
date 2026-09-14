@@ -237,12 +237,21 @@
     // ── the scan ───────────────────────────────────────────────────────────────────────
     const escapeForRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
+    /**
+     * Separates the text the editor can act on from the text it cannot. Everything a collector
+     * appends after this mark is text the running editor can neither highlight nor replace - a
+     * spreadsheet's text boxes, whose search engine only looks at cells - so a word found there
+     * is reported without a position, the same way a word the pdf engine reports is. A control
+     * character no document text contains, so it can never split a word of its own accord.
+     */
+    const REPORT_ONLY_MARK = "\u0000";
+
     /** A little of the surrounding text, so a reviewer can see where a word sits. */
     const getSnippet = (text, index, length) => {
         const pad   = 55;
         const start = Math.max(0, index - pad);
         const end   = Math.min(text.length, index + length + pad);
-        const body  = text.slice(start, end).replace(/[\r\n\t]+/g, " ");
+        const body  = text.slice(start, end).replace(/[\r\n\t\u0000]+/g, " ");
         return (start > 0 ? "…" : "") + body + (end < text.length ? "…" : "");
     };
 
@@ -253,6 +262,12 @@
      */
     const scanText = (text, rules) => {
         const body = text || "";
+
+        // Where the text the editor cannot act on starts, or the end of the text when all of it
+        // can be acted on.
+        const markAt = body.indexOf(REPORT_ONLY_MARK);
+        const reportOnlyFrom = markAt < 0 ? body.length : markAt;
+
         const allowed = {};
         ((rules && rules.allowed) || []).forEach((rule) => { allowed[rule.lower] = true; });
 
@@ -272,11 +287,15 @@
                 if (seen[key]) continue;
                 seen[key] = true;
 
+                // A match past the mark has no position the editor can be sent to, and no
+                // snippet either: index -1 is how a reported-only word is already spelt.
+                const isReportOnly = match.index >= reportOnlyFrom;
+
                 found.push({
                     matched: match[0],
-                    index:   match.index,
+                    index:   isReportOnly ? -1 : match.index,
                     rule:    rule,
-                    snippet: getSnippet(body, match.index, match[0].length)
+                    snippet: isReportOnly ? "" : getSnippet(body, match.index, match[0].length)
                 });
             }
         });
@@ -298,109 +317,226 @@
     };
 
     // ── reading the document ───────────────────────────────────────────────────────────
-    // These three run inside the editor via callCommand, which serialises them to a string -
-    // so each one has to be self-contained: no closures, no references to anything here.
-    const collectors = {
-        // Api.GetDocument() answers in the spreadsheet too, but the object it returns has no
-        // GetSheet/GetSheetsCount - the sheets come from Api.GetSheets(). A used range of one
-        // cell hands back a scalar rather than a grid, so both shapes are flattened here.
-        cell: function () {
-            try {
-                const sheets = Api.GetSheets ? Api.GetSheets() : [];
-                const parts = [];
-                for (let sheet = 0; sheet < sheets.length; sheet++) {
-                    const worksheet = sheets[sheet];
-                    const range = worksheet && worksheet.GetUsedRange ? worksheet.GetUsedRange() : null;
-                    if (!range) continue;
-                    const values = range.GetValue();
-                    const rows = Array.isArray(values) ? values : [values];
-                    rows.forEach(function (row) {
-                        const cells = Array.isArray(row) ? row : [row];
-                        cells.forEach(function (value) {
-                            if (value !== null && value !== undefined && value !== "") {
-                                parts.push(String(value));
-                            }
+    /**
+     * The whole document, as one string, for whichever editor is running.
+     *
+     * This runs inside the editor via callCommand, which serialises it to a string - so it has
+     * to be self-contained: no closures over anything in this file, and everything it needs
+     * passed in through Asc.scope. That is also why all three editors are read by one function
+     * rather than three: the helpers that read a document content, a shape or a table are the
+     * same everywhere and exist here once.
+     *
+     * What it has to cover is set by the editor's own search engine, because the engine is what
+     * highlights whatever this finds: a word this misses is a word that is neither marked nor
+     * blocked. For a text document the engine walks the body, the headers and footers of every
+     * section, the footnotes, the endnotes and the text inside every shape - so all of those are
+     * read here too. Reading only the body's top-level paragraphs (which is all this used to do)
+     * let a word inside a table, a text box, a header or a footnote save unchallenged.
+     *
+     * Every stage is read on its own and its failure is swallowed: a document whose footnotes
+     * cannot be read still has its body scanned, which is safer than one unreadable corner
+     * turning the whole scan clean.
+     */
+    const documentTextCollector = function () {
+        // One part per region, joined with a newline, so no phrase can be formed across the
+        // seam between two of them - a word in one table cell and the next word in its
+        // neighbour must not read as a banned phrase.
+        const parts = [];
+        const add = (text) => {
+            if (text !== null && text !== undefined && text !== "") parts.push(String(text));
+        };
+
+        // Text the editor can neither mark nor rewrite is kept apart and appended last, behind
+        // the mark the scan looks for - see REPORT_ONLY_MARK. A word found only there is named
+        // in the message that holds the save, but the panel is not offered a Remove button that
+        // would do nothing.
+        const reportOnly = [];
+        const addReportOnly = (text) => {
+            if (text !== null && text !== undefined && text !== "") reportOnly.push(String(text));
+        };
+
+        const attempt = (read) => { try { read(); } catch (error) { /* this region only */ } };
+
+        // Numbering is left out (list numbers are not the user's words) and every separator is
+        // a newline for the same reason the parts are: text from two cells, rows or paragraphs
+        // must never join into a phrase that is in neither of them.
+        const TEXT_OPTIONS = {
+            Numbering:          false,
+            Math:               true,
+            TableCellSeparator: "\n",
+            TableRowSeparator:  "\n",
+            ParaSeparator:      "\n",
+            TabSymbol:          " ",
+            NewLineSeparator:   "\n"
+        };
+
+        /**
+         * A document content - a body, a header, a footnote, a shape's or a cell's insides.
+         * @param {object} content
+         * @param {function} [sink=add] - Where the text goes: add, or addReportOnly.
+         */
+        const readContent = (content, sink) => {
+            if (!content) return;
+            const take = sink || add;
+
+            // GetText reads the whole content in one go, tables and nested tables included.
+            if (typeof content.GetText === "function") {
+                take(content.GetText(TEXT_OPTIONS));
+                return;
+            }
+
+            const count = typeof content.GetElementsCount === "function" ? content.GetElementsCount() : 0;
+            for (let index = 0; index < count; index++) {
+                const element = content.GetElement(index);
+                if (element && typeof element.GetText === "function") take(element.GetText(TEXT_OPTIONS));
+            }
+        };
+
+        /** The text inside every shape of a container - a document, a header, a worksheet. */
+        const readShapes = (container, sink) => {
+            if (!container || typeof container.GetAllShapes !== "function") return;
+            container.GetAllShapes().forEach((shape) => {
+                // A shape says GetDocContent, an older build says GetContent; both answer with
+                // a document content of paragraphs.
+                const reader = shape && (shape.GetDocContent || shape.GetContent);
+                if (typeof reader === "function") attempt(() => readContent(reader.call(shape), sink));
+            });
+        };
+
+        // ── a text document (and anything else built on one) ──────────────────────────
+        const readTextDocument = () => {
+            const doc = Api.GetDocument();
+            if (!doc) return;
+
+            attempt(() => readContent(doc));   // the body, with its tables
+            attempt(() => readShapes(doc));    // text boxes and shapes anchored in the body
+
+            // Headers and footers: three types per section, and sections commonly share one, so
+            // the same text is only taken once.
+            attempt(() => {
+                const sections = typeof doc.GetSections === "function" ? doc.GetSections() : [];
+                const seen = {};
+                sections.forEach((section) => {
+                    ["default", "even", "title"].forEach((type) => {
+                        const contents = [
+                            typeof section.GetHeader === "function" ? section.GetHeader(type, false) : null,
+                            typeof section.GetFooter === "function" ? section.GetFooter(type, false) : null
+                        ];
+                        contents.forEach((content) => {
+                            if (!content) return;
+                            attempt(() => {
+                                const before = parts.length;
+                                readContent(content);
+                                readShapes(content);
+                                const text = parts.slice(before).join("\n");
+                                if (seen[text]) parts.length = before;
+                                else seen[text] = true;
+                            });
                         });
                     });
-                }
-                return parts.join(" ");
-            } catch (error) {
-                return "";
-            }
-        },
-
-        // ApiSlide has no GetObjectsCount/GetObject - its contents come from GetAllDrawings(),
-        // which covers shapes, images, charts and tables alike. Only the slides are read:
-        // Api.GetPresentation().GetAllShapes() would drag in every layout and master, whose
-        // placeholder boilerplate is not the user's text and cannot be removed by them.
-        slide: function () {
-            try {
-                const parts = [];
-                const readDrawing = function (drawing) {
-                    if (!drawing) return;
-
-                    // A shape says GetDocContent, a table cell says GetContent; both answer with
-                    // a document content of paragraphs.
-                    const reader = drawing.GetDocContent || drawing.GetContent;
-                    if (typeof reader === "function") {
-                        const content = reader.call(drawing);
-                        const paragraphCount = content && content.GetElementsCount ? content.GetElementsCount() : 0;
-                        for (let paragraph = 0; paragraph < paragraphCount; paragraph++) {
-                            const element = content.GetElement(paragraph);
-                            if (element && typeof element.GetText === "function") parts.push(element.GetText());
-                        }
-                    }
-
-                    // A table keeps its text in the cells, and a group in its children.
-                    if (typeof drawing.GetRowsCount === "function") {
-                        const rowCount = drawing.GetRowsCount();
-                        for (let row = 0; row < rowCount; row++) {
-                            const tableRow = drawing.GetRow(row);
-                            const cellCount = tableRow && tableRow.GetCellsCount ? tableRow.GetCellsCount() : 0;
-                            for (let cell = 0; cell < cellCount; cell++) {
-                                readDrawing(tableRow.GetCell(cell));
-                            }
-                        }
-                    } else if (typeof drawing.GetAllDrawings === "function") {
-                        drawing.GetAllDrawings().forEach(readDrawing);
-                    }
-                };
-
-                Api.GetPresentation().GetAllSlides().forEach(function (slide) {
-                    slide.GetAllDrawings().forEach(readDrawing);
                 });
-                return parts.join("\n");
-            } catch (error) {
-                return "";
-            }
-        },
+            });
 
-        // Word and pdf both hand back a document of paragraphs.
-        word: function () {
-            try {
-                const doc = Api.GetDocument();
-                const parts = [];
-                const count = doc.GetElementsCount();
-                for (let index = 0; index < count; index++) {
-                    const element = doc.GetElement(index);
-                    if (element && typeof element.GetText === "function") parts.push(element.GetText());
+            // Footnotes and endnotes. The editor lists the *first* paragraph of each note; the
+            // note itself is that paragraph's parent content, which holds all of its paragraphs
+            // - so one read per note covers a note of any length exactly once.
+            attempt(() => {
+                const firstParagraphs = [];
+                if (typeof doc.GetFootnotesFirstParagraphs === "function")
+                    firstParagraphs.push.apply(firstParagraphs, doc.GetFootnotesFirstParagraphs());
+                if (typeof doc.GetEndNotesFirstParagraphs === "function")
+                    firstParagraphs.push.apply(firstParagraphs, doc.GetEndNotesFirstParagraphs());
+
+                firstParagraphs.forEach((paragraph) => attempt(() => {
+                    const note = paragraph && paragraph.Paragraph && typeof paragraph.Paragraph.GetParent === "function"
+                        ? paragraph.Paragraph.GetParent()
+                        : null;
+                    if (note && typeof note.GetText === "function") add(note.GetText(TEXT_OPTIONS));
+                    else if (paragraph && typeof paragraph.GetText === "function") add(paragraph.GetText(TEXT_OPTIONS));
+                }));
+            });
+        };
+
+        // ── a presentation ────────────────────────────────────────────────────────────
+        // Only the slides and their speaker notes are read, which is exactly what the engine
+        // searches: GetAllShapes on the presentation would drag in every layout and master,
+        // whose placeholder boilerplate is not the user's text and cannot be removed by them.
+        const readPresentation = () => {
+            const readDrawing = (drawing) => {
+                if (!drawing) return;
+
+                const reader = drawing.GetDocContent || drawing.GetContent;
+                if (typeof reader === "function") attempt(() => readContent(reader.call(drawing)));
+
+                // A table keeps its text in the cells, and a group in its children.
+                if (typeof drawing.GetRowsCount === "function") {
+                    const rowCount = drawing.GetRowsCount();
+                    for (let row = 0; row < rowCount; row++) {
+                        const tableRow = drawing.GetRow(row);
+                        const cellCount = tableRow && tableRow.GetCellsCount ? tableRow.GetCellsCount() : 0;
+                        for (let cell = 0; cell < cellCount; cell++) readDrawing(tableRow.GetCell(cell));
+                    }
+                } else if (typeof drawing.GetAllDrawings === "function") {
+                    drawing.GetAllDrawings().forEach(readDrawing);
                 }
-                return parts.join("\n");
-            } catch (error) {
-                return "";
+            };
+
+            Api.GetPresentation().GetAllSlides().forEach((slide) => {
+                attempt(() => slide.GetAllDrawings().forEach(readDrawing));
+                attempt(() => {
+                    const notes = typeof slide.GetNotesPage === "function" ? slide.GetNotesPage() : null;
+                    if (notes && typeof notes.GetBodyShapeText === "function") add(notes.GetBodyShapeText());
+                });
+            });
+        };
+
+        // ── a spreadsheet ─────────────────────────────────────────────────────────────
+        // Api.GetDocument() answers here too, but the object it returns has no GetSheet or
+        // GetSheetsCount - the sheets come from Api.GetSheets(). A used range of one cell hands
+        // back a scalar rather than a grid, so both shapes are flattened.
+        //
+        // Text boxes are read as well, as report-only text: the spreadsheet's search engine
+        // only ever looks at cells (it walks cells, not runs), so a word inside a text box can
+        // be neither highlighted nor replaced from here - but it is still named in the message
+        // that holds the save, which is what stops it reaching the file.
+        const readWorkbook = () => {
+            const sheets = Api.GetSheets ? Api.GetSheets() : [];
+            for (let index = 0; index < sheets.length; index++) {
+                const worksheet = sheets[index];
+                if (!worksheet) continue;
+
+                attempt(() => {
+                    const range = worksheet.GetUsedRange ? worksheet.GetUsedRange() : null;
+                    if (!range) return;
+                    const values = range.GetValue();
+                    const rows = Array.isArray(values) ? values : [values];
+                    rows.forEach((row) => {
+                        const cells = Array.isArray(row) ? row : [row];
+                        cells.forEach(add);
+                    });
+                });
+                attempt(() => readShapes(worksheet, addReportOnly));
             }
-        }
+        };
+
+        const readers = { cell: readWorkbook, slide: readPresentation, word: readTextDocument };
+        (readers[Asc.scope.contentPolicyEditorType] || readTextDocument)();
+
+        // The mark is REPORT_ONLY_MARK, spelt out because this function is serialised on its
+        // own and can close over nothing.
+        const body = parts.join("\n");
+        return reportOnly.length ? body + "\u0000" + reportOnly.join("\n") : body;
     };
 
     /**
      * The whole document as one string. Rejects nothing: an editor that cannot be read hands
-     * back an empty string, which scans clean.
+     * back an empty string, which scans clean - the pdf editor, where a plugin reaches no text
+     * at all, is read by the engine's own search instead (see detectWithEditorSearch).
      * @param {string} editorType - word, cell, slide or pdf.
      * @param {number} timeoutMs - Answer empty rather than hang if callCommand never returns.
      * @returns {Promise<string>}
      */
     const collectDocumentText = (editorType, timeoutMs) => new Promise((resolve) => {
-        const collector = collectors[editorType] || collectors.word;
         let settled = false;
 
         const finish = (text) => {
@@ -412,7 +548,14 @@
         const timer = window.setTimeout(() => finish(""), timeoutMs || 10000);
 
         try {
-            window.Asc.plugin.callCommand(collector, undefined, undefined, (text) => {
+            // Which editor to read is the one thing the command needs from here, and Asc.scope
+            // is the only channel into it - callCommand serialises the function itself.
+            window.Asc.scope.contentPolicyEditorType = editorType || "word";
+
+            // isClose false, isCalc false: reading the text changes nothing, and letting the
+            // editor recalculate after every scan would drop the highlight this scan just
+            // asked for and cost a layout pass on a large document every few seconds.
+            window.Asc.plugin.callCommand(documentTextCollector, false, false, (text) => {
                 window.clearTimeout(timer);
                 finish(text);
             });
@@ -488,6 +631,157 @@
      */
     const canPluginEditText = (editorType) => editorType !== "pdf";
 
+    // ── which document this half is attached to ─────────────────────────────
+    /**
+     * The property the id is kept on inside the editor - see instanceIdCommand.
+     */
+    const INSTANCE_PROPERTY = "__sarvContentPolicyInstanceId";
+
+    /**
+     * Runs inside the editor, through callCommand. A command is evaluated with window, document
+     * and globalThis all shadowed by empty objects, so the editor's own Api object is the only
+     * thing a command can reach that outlives the call and that both halves of this plugin share
+     * - one Api per open editor. An id is minted on it the first time either half asks, and
+     * every later ask, from either half, gets that same id back.
+     */
+    const instanceIdCommand = function () {
+        const property = Asc.scope.contentPolicyInstanceProperty;
+        if (!Api[property]) {
+            Api[property] = "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
+        return Api[property];
+    };
+
+    /**
+     * The document key the editor itself knows, when the plugin frame can see the editor's
+     * window. Both halves are served from the document server, the same origin as the editor
+     * page that frames them, so this normally reads the very key the document was opened under -
+     * a name that survives a reload, which a minted id cannot. A plugin frame that cannot reach
+     * its parent (an isolated plugin, an opaque origin) gets nothing and the caller mints instead.
+     * @returns {string}
+     */
+    const editorWindowDocumentId = () => {
+        let frame = window;
+        for (let depth = 0; depth < 3; depth += 1) {
+            try {
+                const parent = frame.parent;
+                if (!parent || parent === frame) return "";
+                frame = parent;
+
+                const editor = frame.Asc && frame.Asc.editor;
+                if (editor && editor.documentId) return String(editor.documentId);
+            } catch (error) {
+                return "";   // cross-origin, and every frame above it is too
+            }
+        }
+        return "";
+    };
+
+    /**
+     * Names the document this half is attached to, so a message from another one can be told
+     * apart from a message about this one. A BroadcastChannel carries to every tab of the same
+     * origin, so without this a panel watching a text document is handed - and believes - the
+     * scan of the presentation open in the next tab.
+     *
+     * Asked for once: the answer cannot change while the document is open, and both halves have
+     * to agree on it, which they do by resolving it exactly the same way.
+     * @param {number} [timeoutMs]
+     * @returns {Promise<string>}
+     */
+    let documentKeyPromise = null;
+    const documentKey = (timeoutMs) => {
+        if (documentKeyPromise) return documentKeyPromise;
+
+        const editorType = (window.Asc && window.Asc.plugin && window.Asc.plugin.info
+            && window.Asc.plugin.info.editorType) || "";
+
+        documentKeyPromise = new Promise((resolve) => {
+            const known = editorWindowDocumentId();
+            if (known) {
+                resolve(editorType + ":doc:" + known);
+                return;
+            }
+
+            let settled = false;
+            const finish = (id) => {
+                if (settled) return;
+                settled = true;
+                // The editor type alone is the last resort: it still keeps a text document's
+                // panel from listening to a presentation's worker.
+                resolve(id ? editorType + ":instance:" + id : editorType);
+            };
+
+            const timer = window.setTimeout(() => finish(""), timeoutMs || 10000);
+
+            try {
+                window.Asc.scope = window.Asc.scope || {};
+                window.Asc.scope.contentPolicyInstanceProperty = INSTANCE_PROPERTY;
+                window.Asc.plugin.callCommand(instanceIdCommand, false, false, (id) => {
+                    window.clearTimeout(timer);
+                    finish(id);
+                });
+            } catch (error) {
+                window.clearTimeout(timer);
+                finish("");
+            }
+        });
+
+        return documentKeyPromise;
+    };
+
+    /**
+     * Whether a message that arrived on the channel is about the document this half is attached
+     * to. A stamped message is believed only on a matching key - including in the moment before
+     * this half has resolved its own, where nothing can confirm it belongs here. An unstamped
+     * message is judged on its editor type, which at least keeps a text document apart from the
+     * presentation in the next tab.
+     * @param {?string} ownKey
+     * @param {?object} message
+     * @param {string} ownEditorType
+     * @returns {boolean}
+     */
+    const isSameDocument = (ownKey, message, ownEditorType) => {
+        if (!message) return false;
+        if (message.documentKey) return ownKey === message.documentKey;
+        if (ownEditorType && message.editorType) return ownEditorType === message.editorType;
+        return true;
+    };
+
+    // ── what to show for what was found ───────────────────────────────────
+    /**
+     * One entry per disallowed word rather than one per occurrence: a word used four times is
+     * one thing to fix, not four, and Remove takes out every occurrence of it in one go anyway.
+     * Case is ignored when grouping - "EBITDA" and "ebitda" break the same rule - and the first
+     * spelling met is the one shown.
+     * @param {Array<{matched: string, index: number, rule: object, snippet: string}>} violations
+     * @returns {Array<{matched: string, count: number, rule: object, occurrences: Array}>}
+     */
+    const groupViolations = (violations) => {
+        const byWord = {};
+        const groups = [];
+
+        (violations || []).forEach((violation) => {
+            const lower = String(violation.matched).toLowerCase();
+            let group = byWord[lower];
+
+            if (!group) {
+                group = {
+                    matched:     violation.matched,
+                    rule:        violation.rule,
+                    count:       0,
+                    occurrences: []
+                };
+                byWord[lower] = group;
+                groups.push(group);
+            }
+
+            group.count += 1;
+            group.occurrences.push(violation);
+        });
+
+        return groups;
+    };
+
     // ── the channel between the two plugins ────────────────────────────────────────────
     /**
      * A BroadcastChannel when the browser has one, and a no-op that reports itself unusable
@@ -558,6 +852,9 @@
         collectDocumentText: collectDocumentText,
         detectWithEditorSearch: detectWithEditorSearch,
         canPluginEditText:   canPluginEditText,
+        groupViolations:     groupViolations,
+        documentKey:         documentKey,
+        isSameDocument:      isSameDocument,
 
         openChannel:         openChannel
     };

@@ -18,6 +18,8 @@
     "Never synced": "Ещё не синхронизировано",
     "No violations found": "Нарушений не найдено",
     "violation(s) found": "нарушение(й) найдено",
+    "disallowed term(s) found": "запрещённых терминов найдено",
+    "occurrence(s)": "вхождений",
     "No text to scan. Select text or choose Scan Document.": "Нет текста для сканирования. Выберите текст или нажмите «Сканировать документ».",
     "Rules not loaded yet. Click ↻ to sync.": "Правила ещё не загружены. Нажмите ↻ для синхронизации.",
     "API URL not configured. Open Settings first.": "URL API не настроен. Сначала откройте Настройки.",

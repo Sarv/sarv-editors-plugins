@@ -2,6 +2,22 @@
 
 ---
 
+## v1.5.0
+
+### Bug fixes
+- **A banned word hidden in a table, a header, a footer, a footnote or a text box was reported by nobody** — the shared core read only the document body's top-level paragraphs, so the panel, like the worker, listed nothing for a word anywhere else. It now reads everything the editor's own search engine covers: the body with its tables (nested ones included), the headers and footers of every section, every footnote and endnote, the text inside every shape and text box, and a presentation's speaker notes. A word found in any of those is listed with its snippet and removed by **Remove** like any other, because the editor's search-and-replace reaches all of them.
+- **Two neighbouring spreadsheet cells could invent a phrase that was in neither** — cell values were joined with a space, so `top` beside `secret` read as `top secret`. Every region is now joined with a newline, which no phrase can match across.
+- **The panel listed words that were in a different document** — the worker broadcasts what it finds on a `BroadcastChannel`, which carries to every tab of the same origin, and the panel believed every result that arrived. With a presentation open beside a text document, the document's panel showed the presentation's words, counted them in its badge and offered to remove them, and the count flickered between the two documents' as each worker reported in. Every message is now stamped with the document it is about — the key the editor opened the document under, or an id minted inside the editor when the plugin frame cannot see it — and a result about another document is ignored.
+- **The removal history was shared by every document of a kind** — it was scoped by a title read through `GetDocumentInfo`, which is not an editor method, so every text document filed its history under the same `word:default`. It is scoped by the document key above instead.
+
+### Improvements
+- **One row per word, not one per occurrence** — a word used four times filled the list with four identical rows, each with its own **Remove** button that took out all four anyway. Each word now has one row, with the number of times it appears beside it (`EBITDA (2)`), and the badge, the warning bar and the summary count words, the summary naming the occurrence total alongside.
+- **A spreadsheet's text boxes are listed as report-only** — their text is now scanned, but the spreadsheet's search engine walks cells rather than runs and can neither mark nor replace a word inside a shape, so such a word is listed the way a pdf's is: named, no snippet, no **Remove** button, and skipped by **Remove all** and the auto-remove countdown. The save is still held while it is there.
+- **One collector instead of three** — the three per-editor readers in the core were one function each with their own copy of "read a document content"; they are now one collector that dispatches on the editor type through `Asc.scope`, so the helpers that read a content, a shape or a table exist once.
+- **Reading the document no longer recalculates it** — the read asked the editor to recalculate afterwards, which discarded the worker's highlight and cost a layout pass on a large document every few seconds.
+
+---
+
 ## v1.4.0
 
 ### Improvements

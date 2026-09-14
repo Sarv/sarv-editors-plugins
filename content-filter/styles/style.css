@@ -311,6 +311,19 @@ html, body {
     font-size: 12px;
 }
 
+/* How many times the word appears - the row is one word, not one occurrence. */
+.v-count {
+    color: var(--text-secondary, #757575);
+    font-size: 11px;
+    font-weight: normal;
+}
+
+/* The occurrence total beside the summary's word count. */
+.summary-note {
+    font-weight: normal;
+    opacity: 0.85;
+}
+
 .v-cat {
     background: var(--background-toolbar-additional, #EEEEEE);
     color: var(--text-normal, #555);

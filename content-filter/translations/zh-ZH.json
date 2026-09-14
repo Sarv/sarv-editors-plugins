@@ -18,6 +18,8 @@
     "Never synced": "从未同步",
     "No violations found": "未发现违规",
     "violation(s) found": "处违规",
+    "disallowed term(s) found": "个违禁词",
+    "occurrence(s)": "处",
     "No text to scan. Select text or choose Scan Document.": "无文本可扫描。请选择文本或选择扫描文档。",
     "Rules not loaded yet. Click ↻ to sync.": "规则尚未加载。点击 ↻ 进行同步。",
     "API URL not configured. Open Settings first.": "API 地址未配置。请先打开设置。",
