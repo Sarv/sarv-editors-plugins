@@ -38,7 +38,7 @@ Plugin → host:
 |---|---|
 | `ready` | `{ editor, settings }` — repeated every 1s until acked (60 tries max) |
 | `settings` | `{ settings }` — after the user saves in the settings window |
-| `result` | `{ requestId, ok, format, content, meta }` — `content` is the whole answer, one message, every style inline |
+| `result` | `{ requestId, ok, format, escape, content, meta }` — `content` is the whole answer, one message, every style inline |
 | `error` | `{ requestId, message }` |
 
 Host → plugin:
@@ -46,7 +46,7 @@ Host → plugin:
 | `type` | payload |
 |---|---|
 | `ack` | stops the beacon |
-| `extract` | `{ requestId, format?, options? }` — `format` overrides the saved setting for this call only |
+| `extract` | `{ requestId, format?, markup?, escape?, options? }` — each one overrides the saved setting for this call only |
 | `getSettings` / `setSettings` | read / write the saved settings |
 | `openSettings` | opens the settings window inside the editor |
 
@@ -74,6 +74,77 @@ plugin.postMessage({ channel: CHANNEL, type: "extract", requestId: 1 }, "*");
 
 A full working host is `../../scripts/editor/html-submit-poc.html`
 (`http://localhost:4000/editor/html-submit-poc.html`).
+
+## Markup and escaping
+
+`markup` decides how much of the copy pipeline's output survives; `escape` decides what
+shape the string arrives in. They are independent, and both can be overridden per call.
+
+### `markup: "clean"` (default)
+
+`GetFileHTML` is the clipboard producer, so what it returns is Word's own paste payload:
+every tag carries the editor's bookkeeping, bold and italic arrive as presentational
+`<b>`/`<i>`, and each paragraph repeats the zeroed margins and borders that exist only to
+defeat a host stylesheet.
+
+```html
+<p style="margin:0;padding:0;font:inherit;color:inherit;text-align:center;margin-top:0pt;
+   margin-bottom:0pt;border:none;mso-border-left-alt:none;mso-border-between:none">
+  <span style="font-family:'Noto Sans';font-size:14pt;color:#000000;
+     mso-style-textfill-fill-color:#000000"><b style="font-weight:bold;">Hi</b></span></p>
+```
+
+The clean pass keeps what the document actually says — font, size, colour, alignment,
+real paragraph spacing, table geometry and image placement — and drops the rest:
+
+```html
+<p style="text-align: center;"><span style="font-family: &quot;Noto Sans&quot;;
+   font-size: 14pt; color: rgb(0, 0, 0);"><strong>Hi</strong></span></p>
+```
+
+It runs over a parsed document rather than regular expressions, which is what makes it
+safe: unwrapping an element that lost its last attribute needs its matching close tag,
+the browser's CSS parser discards every `mso-*` declaration for free (they are not real
+properties, so they never reach the `CSSStyleDeclaration`), and it expands the shorthands
+so one flat allow-list can decide the whole style attribute. On a real document the markup
+went from ~12.5 KB to ~3.1 KB; base64 images dominate the total either way.
+
+`markup: "full"` is the escape hatch — the clipboard payload byte for byte, bookkeeping
+included, for anything downstream that needs the original.
+
+### Everything emitted is CSS 2.1
+
+Exported content ends up in mail clients, PDF engines and CMS sanitisers that are years
+behind a browser, and a declaration they cannot parse is not degraded — the stricter ones
+drop the whole style attribute with it. So the clean pass gates both halves:
+
+- **Properties** — a CSS 2.1 allow-list, per element. `text-decoration-line` and
+  `border-image-*` (which is what Chrome expands `border: none` into alongside the real
+  longhands) are named out.
+- **Values** — the values are not ours, they come back out of the browser's CSSOM, which
+  re-serialises into syntax CSS 2.1 never had. `rgba()` is flattened to `rgb()` while it is
+  opaque and dropped while it is not; `text-decoration: underline solid rgb(0,0,0)` loses
+  its CSS3 components; `hsl()`, `calc()`, `var()`, `rem`/`vw`/`vh` units, vendor prefixes
+  and CSS3 `display` values are dropped.
+- **Shorthands** — the CSSOM only hands back longhands, so a bordered cell arrives as
+  twelve declarations saying one thing. Families are folded back into the CSS 2.1
+  shorthand when all four sides are present and agree, and left expanded when they are not.
+
+The page box (`frame: true`) is CSS 2.1 too: there is no `box-sizing`, so `width` is the
+content width — the page less its two side margins — and the padding is added outside it.
+
+### `escape`
+
+| value | `content` holds |
+|---|---|
+| `"none"` (default) | the markup as a plain string — what you want if you are about to render it |
+| `"json"` | the markup already serialised as a JSON string literal, surrounding quotes included: `"<p style=\"text-align: center;\">Hi</p>"`. Drop it straight into a payload or a text column. |
+| `"entities"` | the markup made inert — `&lt;p&gt;` — so it shows as visible source in a `<pre>`, a `<textarea>` or an attribute |
+
+`"json"` is for a host that carries the content rather than renders it. If your own code
+will `JSON.stringify` the message, leave this at `"none"` or it is escaped twice. The
+`result` message echoes `escape` back, so a host always knows whether it is holding markup
+or a payload.
 
 ## Where the content comes from
 
@@ -221,7 +292,9 @@ Stored in the plugin origin's `localStorage` under `sarv-content-export.settings
 | key | default | meaning |
 |---|---|---|
 | `format` | `"html"` | `"html"` or `"markdown"` |
-| `frame` | `true` | wrap the HTML in the document's own page box |
+| `markup` | `"clean"` | `"clean"` for lean semantic CSS 2.1 HTML, `"full"` for the raw clipboard payload |
+| `escape` | `"none"` | `"none"`, `"json"` (a JSON string literal) or `"entities"` (`&lt;p&gt;`) |
+| `frame` | `false` | wrap the HTML in the document's own page box |
 | `base64img` | `true` | embed images as data URIs |
 | `htmlHeadings` | `false` | Markdown: emit `<h1>` tags instead of `#` |
 | `demoteHeadings` | `false` | Markdown: shift every heading down one level |
