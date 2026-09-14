@@ -34,10 +34,29 @@
         return document.getElementById(FIELDS[key]);
     }
 
-    function applySettings(settings) {
-        var format = (settings && settings.format === "markdown") ? "markdown" : "html";
-        var radio  = document.querySelector('input[name="format"][value="' + format + '"]');
+    // The three-way choices, with the value normalizeSettings falls back to.
+    var CHOICES = {
+        format: { values: ["html", "markdown"],           fallback: "html"  },
+        markup: { values: ["clean", "full"],              fallback: "clean" },
+        escape: { values: ["none", "json", "entities"],   fallback: "none"  }
+    };
+
+    function applyChoice(name, value) {
+        var choice = CHOICES[name];
+        var wanted = (choice.values.indexOf(value) === -1) ? choice.fallback : value;
+        var radio  = document.querySelector('input[name="' + name + '"][value="' + wanted + '"]');
         if (radio) radio.checked = true;
+    }
+
+    function readChoice(name) {
+        var selected = document.querySelector('input[name="' + name + '"]:checked');
+        return selected ? selected.value : CHOICES[name].fallback;
+    }
+
+    function applySettings(settings) {
+        Object.keys(CHOICES).forEach(function (name) {
+            applyChoice(name, settings && settings[name]);
+        });
 
         Object.keys(FIELDS).forEach(function (key) {
             var input = checkbox(key);
@@ -46,12 +65,14 @@
     }
 
     function collectSettings() {
-        var selected = document.querySelector('input[name="format"]:checked');
         return Object.keys(FIELDS).reduce(function (acc, key) {
             var input = checkbox(key);
             acc[key] = !!(input && input.checked);
             return acc;
-        }, { format: selected ? selected.value : "html" });
+        }, Object.keys(CHOICES).reduce(function (acc, name) {
+            acc[name] = readChoice(name);
+            return acc;
+        }, {}));
     }
 
     // ---- the integrator's config block --------------------------------------------

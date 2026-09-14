@@ -115,11 +115,39 @@
             <div class="section-title">Output format</div>
             <label class="choice">
                 <input type="radio" name="format" value="html"> HTML
-                <span class="hint">Whole-document HTML with the original fonts, sizes, colours and alignment. Every style is inline, so the content is self-contained.</span>
+                <span class="hint">Whole-document HTML with the original fonts, sizes, colours and alignment. Every style is inline, so the content is self-contained. How much of it is kept is the Markup choice below.</span>
             </label>
             <label class="choice">
                 <input type="radio" name="format" value="markdown"> Markdown
                 <span class="hint">Plain Markdown. Character formatting beyond bold/italic/headings is not representable.</span>
+            </label>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Markup</div>
+            <label class="choice">
+                <input type="radio" name="markup" value="clean"> Clean
+                <span class="hint">Lean, semantic HTML: the document's fonts, sizes, colours, alignment and spacing, and nothing else. Word's <code>mso-</code> bookkeeping and the zeroed margins the copy pipeline writes are dropped, and <code>&lt;b&gt;</code>/<code>&lt;i&gt;</code> become <code>&lt;strong&gt;</code>/<code>&lt;em&gt;</code>. Every declaration is CSS 2.1, so older mail clients and PDF engines can read it.</span>
+            </label>
+            <label class="choice">
+                <input type="radio" name="markup" value="full"> Full fidelity
+                <span class="hint">The clipboard payload exactly as the editor produced it, bookkeeping included. Larger by roughly ten times, and not CSS 2.1 — use it only when something downstream needs the original bytes.</span>
+            </label>
+        </div>
+
+        <div class="section">
+            <div class="section-title">Escaping</div>
+            <label class="choice">
+                <input type="radio" name="escape" value="none"> None
+                <span class="hint">The content as a plain string. What you want if the page is about to render it.</span>
+            </label>
+            <label class="choice">
+                <input type="radio" name="escape" value="json"> JSON string
+                <span class="hint">The content already serialised as a JSON string literal, surrounding quotes included — <code>"&lt;p&gt;&lt;span style=\"…\"&gt;"</code>. Paste it straight into a payload or a text column. Leave this off if your own code will <code>JSON.stringify</code> the message, or it is escaped twice.</span>
+            </label>
+            <label class="choice">
+                <input type="radio" name="escape" value="entities"> HTML entities
+                <span class="hint">The markup made inert — <code>&amp;lt;p&amp;gt;</code> — so it shows as visible source inside a <code>&lt;pre&gt;</code>, a <code>&lt;textarea&gt;</code> or an attribute.</span>
             </label>
         </div>
 
@@ -205,14 +233,17 @@ window.addEventListener("message", (event) =&gt; {
         <div class="step">
             <h3><span class="num">5</span>Inject the answer</h3>
             <p>The reply arrives in the same listener you wrote in step 3.
-               <code>data.content</code> is the whole answer - every style is inline, page width
-               and margins included, so there is no stylesheet to place and nothing else to
-               wire up. Keep it in a variable instead if you are posting it somewhere rather
-               than showing it.</p>
+               <code>data.content</code> is the whole answer - every style is inline, so there is
+               no stylesheet to place and nothing else to wire up. Keep it in a variable
+               instead if you are posting it somewhere rather than showing it; ask for
+               <code>escape: "json"</code> on the <code>extract</code> and it arrives ready
+               to drop into a payload.</p>
             <div class="snippet"><pre>if (data.type === "result") {
   const box = document.getElementById("output");
 
-  if (data.format === "markdown") {
+  if (data.escape !== "none") {
+    box.textContent = data.content;              // escaped - a payload, not markup
+  } else if (data.format === "markdown") {
     box.textContent = data.content;              // raw Markdown
   } else {
     box.innerHTML = data.content;                // self-contained HTML
@@ -235,13 +266,13 @@ if (data.type === "error") {
             <table class="msgs">
                 <tr><th>You send</th><th>What it does</th></tr>
                 <tr><td><code>ack</code></td><td>Confirms you are listening. Stops the ready beacon.</td></tr>
-                <tr><td><code>extract</code></td><td>Returns the document. Optional <code>format</code>, <code>options</code>, <code>requestId</code>.</td></tr>
+                <tr><td><code>extract</code></td><td>Returns the document. Optional <code>format</code>, <code>markup</code>, <code>escape</code>, <code>options</code>, <code>requestId</code>.</td></tr>
                 <tr><td><code>getSettings</code></td><td>Answers with the current settings.</td></tr>
                 <tr><td><code>setSettings</code></td><td>Overwrites settings from your page.</td></tr>
                 <tr><td><code>openSettings</code></td><td>Opens this window.</td></tr>
                 <tr><th>You receive</th><th>Payload</th></tr>
                 <tr><td><code>ready</code></td><td><code>guid</code>, <code>editor</code>, <code>settings</code> - repeated once a second until you <code>ack</code> (60 tries, then it gives up)</td></tr>
-                <tr><td><code>result</code></td><td><code>requestId</code>, <code>ok</code>, <code>format</code>, <code>content</code>, <code>meta</code></td></tr>
+                <tr><td><code>result</code></td><td><code>requestId</code>, <code>ok</code>, <code>format</code>, <code>escape</code>, <code>content</code>, <code>meta</code></td></tr>
                 <tr><td><code>error</code></td><td><code>requestId</code>, <code>ok</code>, <code>message</code></td></tr>
                 <tr><td><code>settings</code></td><td><code>settings</code> - also sent whenever they change here</td></tr>
             </table>
@@ -253,11 +284,13 @@ if (data.type === "error") {
                 <tr><td><code>requestId</code></td><td>Whatever you sent on the <code>extract</code>, handed straight back. It is how you match a reply to its request when more than one is in flight; the plugin never invents one.</td></tr>
                 <tr><td><code>ok</code></td><td><code>true</code> on <code>result</code>, <code>false</code> on <code>error</code>. Checking <code>data.type</code> is equivalent.</td></tr>
                 <tr><td><code>format</code></td><td>Which format you actually got: <code>"html"</code> or <code>"markdown"</code>. It follows the Settings tab unless your <code>extract</code> overrode it for that one call.</td></tr>
-                <tr><td><code>content</code></td><td><b>The document.</b> One string, sent whole - not chunked, no second message. HTML is self-contained: fonts, sizes, colours, alignment, table widths, image placement and the page box itself are all inline styles. Markdown is the raw text.</td></tr>
-                <tr><td><code>meta</code></td><td>Where the content came from and what page it came from: <code>source</code> (<code>GetFileHTML</code> or <code>ConvertDocument</code>), plus <code>pageWidth</code>, <code>pageHeight</code>, <code>marginLeft/Right/Top/Bottom</code> in twips and <code>fontFamily</code>, <code>fontHalfPt</code> for the document default. Informational - you do not need any of it to render <code>content</code>. Absent geometry means the editor had no document to read it from.</td></tr>
+                <tr><td><code>markup</code></td><td>On <code>extract</code> only, and only for HTML: <code>"clean"</code> (default) for lean semantic CSS 2.1 markup, <code>"full"</code> for the editor's raw clipboard payload. See the Markup section on the Settings tab.</td></tr>
+                <tr><td><code>escape</code></td><td>How <code>content</code> is escaped: <code>"none"</code> (default, a plain string), <code>"json"</code> (a JSON string literal, surrounding quotes included), <code>"entities"</code> (<code>&amp;lt;p&amp;gt;</code>). Send it on <code>extract</code> to override the setting for one call; it comes back on <code>result</code> so you always know what you are holding.</td></tr>
+                <tr><td><code>content</code></td><td><b>The document.</b> One string, sent whole - not chunked, no second message. HTML is self-contained: fonts, sizes, colours, alignment, table widths, image placement and the page box itself are all inline CSS 2.1 styles. Markdown is the raw text. If <code>escape</code> is not <code>"none"</code> this is the escaped form - decode it before rendering.</td></tr>
+                <tr><td><code>meta</code></td><td>Where the content came from and what page it came from: <code>source</code> (<code>GetFileHTML</code> or <code>ConvertDocument</code>), <code>markup</code>, plus <code>pageWidth</code>, <code>pageHeight</code>, <code>marginLeft/Right/Top/Bottom</code> in twips and <code>fontFamily</code>, <code>fontHalfPt</code> for the document default. Informational - you do not need any of it to render <code>content</code>. Absent geometry means the editor had no document to read it from.</td></tr>
                 <tr><td><code>message</code></td><td>On <code>error</code> only: why the export failed, in one sentence.</td></tr>
                 <tr><td><code>editor</code></td><td>On <code>ready</code> only: which editor the plugin came up in (<code>word</code>, <code>cell</code>, <code>slide</code>). Only <code>word</code> can export.</td></tr>
-                <tr><td><code>settings</code></td><td>The saved settings object: <code>format</code>, <code>base64img</code>, <code>frame</code>, <code>htmlHeadings</code>, <code>demoteHeadings</code>, <code>renderHTMLTags</code>. Send the same shape back with <code>setSettings</code>, or pass any subset as <code>options</code> on one <code>extract</code> to override it for that call only.</td></tr>
+                <tr><td><code>settings</code></td><td>The saved settings object: <code>format</code>, <code>markup</code>, <code>escape</code>, <code>base64img</code>, <code>frame</code>, <code>htmlHeadings</code>, <code>demoteHeadings</code>, <code>renderHTMLTags</code>. Send the same shape back with <code>setSettings</code>, or pass any subset as <code>options</code> on one <code>extract</code> to override it for that call only.</td></tr>
             </table>
             <p style="margin-left:0">Every message carries
                <code>channel: "sarv-content-export"</code>; ignore anything that does not.</p>

@@ -20,11 +20,11 @@
  *
  * ── Protocol ────────────────────────────────────────────────────────────────────────
  *   plugin -> host : {channel, type:"ready",    guid, editor, settings}
- *                    {channel, type:"result",   requestId, ok:true, format, content, meta}
+ *                    {channel, type:"result",   requestId, ok:true, format, escape, content, meta}
  *                    {channel, type:"error",    requestId, ok:false, message}
  *                    {channel, type:"settings", settings}
  *   host -> plugin : {channel, type:"ack"}                       stops the ready beacon
- *                    {channel, type:"extract",     requestId, format?, options?}
+ *                    {channel, type:"extract",     requestId, format?, markup?, escape?, options?}
  *                    {channel, type:"getSettings", requestId?}
  *                    {channel, type:"setSettings", requestId?, settings}
  *                    {channel, type:"openSettings"}              opens the settings window
@@ -35,15 +35,18 @@
     var CHANNEL      = "sarv-content-export";
     var SETTINGS_KEY = "sarv-content-export.settings";
 
-    // Format is the user-facing setting; the rest tune the Markdown/HTML converter and
-    // mirror the ConvertDocument signature in apiBase_plugins.js.
+    // Format, markup and escape are the user-facing settings; the rest tune the
+    // Markdown/HTML converter and mirror the ConvertDocument signature in
+    // apiBase_plugins.js.
     var DEFAULT_SETTINGS = {
         format:         "html",   // "html" | "markdown"
+        markup:         "clean",  // "clean" | "full"  - see cleanFragment
+        escape:         "none",   // "none" | "json" | "entities" - see applyEscape
         base64img:      true,     // embed images instead of emitting broken relative links
         htmlHeadings:   false,
         demoteHeadings: false,
         renderHTMLTags: false,
-        frame:          true      // wrap the HTML in the document's own page box
+        frame:          false     // wrap the HTML in the document's own page box
     };
 
     var READY_BEACON_MS    = 1000;
@@ -84,6 +87,8 @@
             return acc;
         }, {});
         merged.format = normalizeFormat(merged.format);
+        merged.markup = normalizeMarkup(merged.markup);
+        merged.escape = normalizeEscape(merged.escape);
         return merged;
     }
 
@@ -91,6 +96,21 @@
     function normalizeFormat(value) {
         var name = String(value || "").toLowerCase();
         return (name === "md" || name === "markdown") ? "markdown" : "html";
+    }
+
+    function normalizeMarkup(value) {
+        var name = String(value || "").toLowerCase();
+        return (name === "full" || name === "raw") ? "full" : "clean";
+    }
+
+    // A caller thinking in terms of its payload says "json"; one thinking in terms of the
+    // markup says "entities" or "html". Anything else means hand the content over as it is.
+    function normalizeEscape(value) {
+        if (value === true) return "json";
+        var name = String(value || "").toLowerCase();
+        if (name === "json") return "json";
+        if (name === "entities" || name === "entity" || name === "html") return "entities";
+        return "none";
     }
 
     // ── editor API helpers ──────────────────────────────────────────────────────────
@@ -428,9 +448,14 @@
             ? (meta.fontHalfPt / 2) + "pt"
             : "11pt";
 
+        /* CSS 2.1 has no box-sizing, so the box is built the way CSS 2.1 measures one:
+           `width` is the CONTENT width - the page less its two side margins - and the
+           padding is added outside it, which comes to the real page width either way.
+           Writing the full page width here instead would overshoot it by both margins. */
+        var contentPx = Math.round((widthPx - padLeft - padRight) * 100) / 100;
+
         return [
-            "box-sizing:border-box",
-            "width:" + widthPx + "px",
+            "width:" + (contentPx > 0 ? contentPx : widthPx) + "px",
             "max-width:100%",
             "margin:0 auto",
             "padding:" + padTop + "px " + padRight + "px " + padBottom + "px " + padLeft + "px",
@@ -438,10 +463,11 @@
             "color:#000000",
             "font-family:" + fontFamily + ", serif",
             "font-size:" + fontSize,
-            /* line-height and overflow-wrap inherit, so the wrapper is enough for both. */
+            /* line-height inherits, so declaring it on the wrapper is enough for the
+               whole fragment. There is no CSS 2.1 spelling for overflow-wrap, so a long
+               unbroken word is left to the renderer rather than bringing CSS3 in. */
             "line-height:normal",
-            "text-align:left",
-            "overflow-wrap:break-word"
+            "text-align:left"
         ];
     }
 
@@ -453,6 +479,8 @@
      * The fragment carries its own inline spacing, so any host defaults for these elements
      * are noise that shifts every paragraph - zero them and let the inline styles work.
      */
+    /* Every declaration below is CSS 2.1, as is everything applyDrawingLayouts and
+       applyTableWidths write - see the CSS 2.1 gate above for why that matters. */
     function elementDefaults() {
         var map = {};
         var add = function (names, declarations) {
@@ -528,9 +556,422 @@
         return wrapInPage(fillEmptyParagraphs(inlineElementDefaults(html)), meta);
     }
 
+    /**
+     * ── clean markup ────────────────────────────────────────────────────────────────
+     *
+     * GetFileHTML is the clipboard producer, so what comes back is Word's own paste
+     * payload rather than anything a host page would want to store: every tag carries the
+     * editor's bookkeeping (mso-border-left-alt, mso-style-textfill-fill-color), bold and
+     * italic arrive as presentational <b>/<i>, and each paragraph repeats the zeroed
+     * margins and borders that only exist to defeat a host stylesheet. A one-page document
+     * arrives as ~300 KB of it.
+     *
+     * The clean pass keeps what the document actually says - font, size, colour,
+     * alignment, paragraph spacing, and the table and image geometry readLayout repaired
+     * above - and drops the rest:
+     *
+     *   <p style="margin:0;padding:0;font:inherit;color:inherit;text-align:center;
+     *      margin-top:0pt;border:none;mso-border-left-alt:none;...">
+     *     <span style="font-family:'Noto Sans';mso-style-textfill-fill-color:#000000">
+     *       <b style="font-weight:bold;">Hi</b></span></p>
+     *
+     *   -> <p style="text-align: center;">
+     *        <span style="font-family: &quot;Noto Sans&quot;;"><strong>Hi</strong></span></p>
+     *
+     * It runs over a parsed document rather than regular expressions, for three reasons the
+     * string form cannot cover: unwrapping an element that lost its last attribute needs its
+     * matching close tag; the browser's CSS parser discards every mso-* declaration for free,
+     * because they are not real properties and so never reach the CSSStyleDeclaration at all;
+     * and it expands the shorthands (`font:inherit`, `border:none`, `margin:0`) into longhands,
+     * which is what makes one flat allow-list able to decide the whole style attribute.
+     */
+
+    // Properties that carry something the document said. Anything outside this list is
+    // either editor bookkeeping or a value the browser already applies by itself.
+    var TEXT_PROPERTIES = [
+        "font-family", "font-size", "font-weight", "font-style", "font-variant",
+        "color", "background-color",
+        "text-align", "text-decoration", "text-indent",
+        "text-transform", "vertical-align", "line-height", "direction", "list-style-type",
+        "margin-top", "margin-right", "margin-bottom", "margin-left",
+        "padding-top", "padding-right", "padding-bottom", "padding-left"
+    ];
+
+    // An image's style is the layout applyDrawingLayouts just wrote, so it is all load-bearing.
+    var IMAGE_PROPERTIES = [
+        "width", "height", "max-width", "float", "display", "clear",
+        "margin-top", "margin-right", "margin-bottom", "margin-left"
+    ];
+
+    var TABLE_TAGS = /^(table|thead|tbody|tfoot|tr|td|th)$/;
+
+    function isKeptProperty(tagName, property) {
+        if (tagName === "img") return IMAGE_PROPERTIES.indexOf(property) !== -1;
+        if (TABLE_TAGS.test(tagName)) {
+            // A table's rules and cell padding ARE its formatting, and the browser expanded
+            // each of them into a fistful of longhands, so take the families whole.
+            // border-image-* is CSS3 and is what Chrome expands `border:none` into
+            // alongside the real longhands, so it has to be named out of the family.
+            return (property.indexOf("border") === 0 && property.indexOf("border-image") !== 0) ||
+                   property.indexOf("padding") === 0 ||
+                   property === "width" || property === "height" ||
+                   TEXT_PROPERTIES.indexOf(property) !== -1;
+        }
+        return TEXT_PROPERTIES.indexOf(property) !== -1;
+    }
+
+    // A declaration that restates the initial value changes nothing, and the copy pipeline
+    // writes a great many of them. `display` is exempt: display:none is the one "no-op"
+    // value that is not one, and dropping it would reveal something the document hides.
+    var NOOP_VALUE = /^(0|0%|0pt|0px|0in|0cm|0em|none|inherit|initial|unset|normal|auto|transparent|currentcolor)$/i;
+
+    /**
+     * ── CSS 2.1 gate ────────────────────────────────────────────────────────────────
+     *
+     * Everything this plugin emits has to be readable by a CSS 2.1 renderer - the mail
+     * clients, PDF engines and CMS sanitisers that receive exported content are years
+     * behind a browser, and a declaration they cannot parse is not degraded, it is dropped
+     * along with the rest of the style attribute in the stricter ones.
+     *
+     * Two halves. The property lists above are already CSS 2.1 only, so the properties are
+     * gated by construction; this is the VALUE half, and it matters because the values
+     * above are not ours - they come back out of the browser's own CSSOM, which happily
+     * re-serialises what the document said into syntax CSS 2.1 never had:
+     *
+     *   color:#00000080          -> rgba(0, 0, 0, 0.5)           CSS3 colour function
+     *   text-decoration:underline-> underline solid rgb(0, 0, 0)  CSS3 shorthand grammar
+     *
+     * Declarations this plugin writes itself (the page box, the element defaults, the
+     * float restored on a wrapped image) are CSS 2.1 by construction and documented as
+     * such where they are built.
+     */
+
+    // Anything a CSS 2.1 parser has no grammar for. rgba() is handled before this, by
+    // flattening; the rest has no CSS 2.1 spelling at all, so the declaration goes.
+    var CSS3_VALUE = /(^|[^\w-])(hsla?|calc|var|clamp|env|min|max|oklch|oklab|lab|lch|color-mix|color|image-set|linear-gradient|radial-gradient)\s*\(|\d(rem|vw|vh|vmin|vmax|ch|q)\b|^--|^-(webkit|moz|ms|o)-/i;
+
+    // CSS 2.1 text-decoration: none | [ underline || overline || line-through || blink ].
+    var CSS2_DECORATIONS = /^(underline|overline|line-through|blink)$/i;
+
+    // CSS 2.1 display. flex, grid, contents and the rest arrived later.
+    var CSS2_DISPLAY = /^(inline|block|list-item|inline-block|table|inline-table|table-row-group|table-header-group|table-footer-group|table-row|table-column-group|table-column|table-cell|table-caption|none)$/i;
+
+    // rgba(r, g, b, a) -> rgb(r, g, b) while it is opaque. A translucent colour has no
+    // CSS 2.1 spelling, and forcing it opaque would render something the document hides,
+    // so that one is dropped instead and the element keeps its inherited colour.
+    function flattenAlpha(value) {
+        return value.replace(/rgba\(\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*,\s*([0-9.]+)\s*\)/gi,
+            function (match, red, green, blue, alpha) {
+                return parseFloat(alpha) >= 1 ? "rgb(" + red + ", " + green + ", " + blue + ")" : "";
+            });
+    }
+
+    /**
+     * The value as CSS 2.1 would spell it, or "" if it has no CSS 2.1 spelling at all -
+     * in which case the caller drops the declaration rather than emit something a strict
+     * parser will choke on.
+     */
+    function css2Value(property, value) {
+        var flattened = flattenAlpha(value).trim();
+        if (!flattened) return "";
+
+        if (property === "text-decoration") {
+            // Chrome serialises the shorthand with the CSS3 style and colour components.
+            return flattened.split(/\s+/).filter(function (part) {
+                return CSS2_DECORATIONS.test(part);
+            }).join(" ");
+        }
+        if (property === "display") {
+            return CSS2_DISPLAY.test(flattened) ? flattened : "";
+        }
+        return CSS3_VALUE.test(flattened) ? "" : flattened;
+    }
+
+    // Style the tag itself already means, so keeping it is duplication. Keyed by the tag as
+    // it arrives, before the rename below.
+    var IMPLIED_STYLE = {
+        b:      ["font-weight"],
+        strong: ["font-weight"],
+        i:      ["font-style"],
+        em:     ["font-style"],
+        u:      ["text-decoration"],
+        s:      ["text-decoration"],
+        strike: ["text-decoration"]
+    };
+
+    // Presentational tags the copy pipeline still emits, and their semantic equivalents.
+    var RENAMED_TAGS = { b: "strong", i: "em", strike: "s", font: "span" };
+
+    var KEPT_ATTRIBUTE = /^(style|href|src|alt|title|colspan|rowspan|width|height|id|name|target|dir|start|type|lang)$/;
+
+    function pruneAttributes(element) {
+        // Live NamedNodeMap - copy the names first, or removing one reindexes the walk.
+        var names = Array.prototype.map.call(element.attributes, function (attribute) {
+            return attribute.name;
+        });
+        names.forEach(function (name) {
+            if (!KEPT_ATTRIBUTE.test(name.toLowerCase())) element.removeAttribute(name);
+        });
+    }
+
+    var BOX_SIDES    = ["top", "right", "bottom", "left"];
+    var BORDER_PARTS = ["width", "style", "color"];
+
+    // CSS 2.1's own shorthand forms: one value when every side agrees, two when the pairs do.
+    function boxShorthand(values) {
+        if (values[0] === values[1] && values[1] === values[2] && values[2] === values[3]) {
+            return values[0];
+        }
+        if (values[0] === values[2] && values[1] === values[3]) {
+            return values[0] + " " + values[1];
+        }
+        return values.join(" ");
+    }
+
+    /**
+     * The CSSOM only ever hands back longhands, so a bordered table cell leaves pruneStyle
+     * as twelve declarations saying one thing - `border: 1pt solid #333` expanded to a
+     * width, a style and a colour for each of four sides. CSS 2.1 has the shorthands, so
+     * fold each family back up when all four sides are present and agree, and leave it
+     * expanded when they do not (which is the only case where the longhands say more).
+     *
+     * A family with a side missing is left alone too: the zeroed sides were dropped as
+     * no-ops on the way in, and a shorthand built from what is left would silently reset
+     * the others. `margin-left:9.07pt` alone must stay margin-left.
+     */
+    function collapseShorthands(declarations) {
+        var valueOf = declarations.reduce(function (acc, declaration) {
+            acc[declaration.property] = declaration.value;
+            return acc;
+        }, {});
+
+        // longhand -> the shorthand that replaces it, or null for "already covered".
+        var replacement = {};
+        var fold = function (longhands, property, value) {
+            longhands.forEach(function (longhand, index) {
+                replacement[longhand] = index === 0 ? { property: property, value: value } : null;
+            });
+        };
+
+        ["margin", "padding"].forEach(function (name) {
+            var longhands = BOX_SIDES.map(function (side) { return name + "-" + side; });
+            if (longhands.some(function (longhand) { return valueOf[longhand] === undefined; })) return;
+            fold(longhands, name, boxShorthand(longhands.map(function (longhand) {
+                return valueOf[longhand];
+            })));
+        });
+
+        var borderLonghands = [];
+        var borderValues    = [];
+        var uniform = BORDER_PARTS.every(function (part) {
+            var longhands = BOX_SIDES.map(function (side) { return "border-" + side + "-" + part; });
+            var first = valueOf[longhands[0]];
+            if (first === undefined) return false;
+            if (!longhands.every(function (longhand) { return valueOf[longhand] === first; })) return false;
+            borderLonghands = borderLonghands.concat(longhands);
+            borderValues.push(first);
+            return true;
+        });
+        if (uniform) fold(borderLonghands, "border", borderValues.join(" "));
+
+        return declarations.reduce(function (acc, declaration) {
+            if (!(declaration.property in replacement)) return acc.concat(declaration);
+            var shorthand = replacement[declaration.property];
+            return shorthand ? acc.concat(shorthand) : acc;
+        }, []);
+    }
+
+    function pruneStyle(element, tagName) {
+        var style   = element.style;
+        var implied = IMPLIED_STYLE[tagName] || [];
+        var declarations = [];
+
+        for (var i = 0; i < style.length; i++) {
+            var property = style.item(i);
+            if (!isKeptProperty(tagName, property)) continue;
+            if (implied.indexOf(property) !== -1) continue;
+
+            var value = css2Value(property, style.getPropertyValue(property).trim());
+            if (!value) continue;
+            if (property !== "display" && NOOP_VALUE.test(value)) continue;
+
+            declarations.push({ property: property, value: value });
+        }
+
+        var folded = collapseShorthands(declarations);
+        if (!folded.length) {
+            element.removeAttribute("style");
+            return;
+        }
+        element.setAttribute("style", folded.map(function (declaration) {
+            return declaration.property + ": " + declaration.value;
+        }).join("; ") + ";");
+    }
+
+    function renameTags(parsed) {
+        var targets = Array.prototype.slice.call(parsed.body.querySelectorAll("b, i, strike, font"));
+        targets.forEach(function (element) {
+            var replacement = parsed.createElement(RENAMED_TAGS[element.tagName.toLowerCase()]);
+            Array.prototype.forEach.call(element.attributes, function (attribute) {
+                replacement.setAttribute(attribute.name, attribute.value);
+            });
+            while (element.firstChild) replacement.appendChild(element.firstChild);
+            element.parentNode.replaceChild(replacement, element);
+        });
+    }
+
+    /**
+     * An inline wrapper with nothing inside it renders nothing, and stripping styles leaves
+     * a lot of them behind - an empty paragraph arrives as <p><span style="..."></span></p>.
+     * Removing one can empty its parent, so repeat until the document stops changing.
+     */
+    function dropEmptyInlines(parsed) {
+        var changed = true;
+        while (changed) {
+            changed = false;
+            var candidates = parsed.body.querySelectorAll("span, strong, em, u, s");
+            Array.prototype.forEach.call(candidates, function (element) {
+                if (element.childNodes.length) return;
+                element.parentNode.removeChild(element);
+                changed = true;
+            });
+        }
+    }
+
+    // A <span> that ended up with no attributes is pure noise; its children belong to its
+    // parent. querySelectorAll is in document order, so an outer span is unwrapped before
+    // the inner ones it holds, and the children it hands up are visited on their own turn.
+    function unwrapBareSpans(parsed) {
+        var candidates = Array.prototype.slice.call(parsed.body.querySelectorAll("span"));
+        candidates.forEach(function (element) {
+            if (element.attributes.length) return;
+            var parent = element.parentNode;
+            while (element.firstChild) parent.insertBefore(element.firstChild, element);
+            parent.removeChild(element);
+        });
+    }
+
+    function dropNodes(parsed, selector) {
+        var targets = parsed.body.querySelectorAll(selector);
+        Array.prototype.forEach.call(targets, function (element) {
+            element.parentNode.removeChild(element);
+        });
+    }
+
+    function dropComments(parsed) {
+        var walker  = parsed.createTreeWalker(parsed.body, window.NodeFilter.SHOW_COMMENT, null, false);
+        var comments = [];
+        while (walker.nextNode()) comments.push(walker.currentNode);
+        comments.forEach(function (comment) {
+            comment.parentNode.removeChild(comment);
+        });
+    }
+
+    function cleanFragment(html) {
+        var parsed;
+        try {
+            parsed = new window.DOMParser().parseFromString(html, "text/html");
+        } catch (e) {
+            return html;
+        }
+        if (!parsed || !parsed.body) return html;
+
+        try {
+            dropNodes(parsed, "script, style, meta, link, base, title");
+            dropComments(parsed);
+
+            Array.prototype.slice.call(parsed.body.querySelectorAll("*")).forEach(function (element) {
+                var tagName = element.tagName.toLowerCase();
+                pruneAttributes(element);
+                pruneStyle(element, tagName);
+            });
+
+            renameTags(parsed);
+            dropEmptyInlines(parsed);
+            unwrapBareSpans(parsed);
+
+            return parsed.body.innerHTML;
+        } catch (e) {
+            // Whatever went wrong, the untouched fragment is still a correct answer.
+            return html;
+        }
+    }
+
+    /**
+     * ── escaping ────────────────────────────────────────────────────────────────────
+     *
+     * The content leaves here as a plain string, which is what a host wants when it is
+     * about to render it. A host that is about to *carry* it wants it escaped, and the two
+     * escapings are not interchangeable:
+     *
+     *   json      JSON.stringify's own output, surrounding quotes included, so the content
+     *             IS the JSON string literal - " and \ backslash-escaped, newlines as \n.
+     *             Paste it into a payload or a text column as it stands. A host that will
+     *             JSON-encode the message itself wants "none", or it escapes it twice.
+     *   entities  the markup made inert: & < > " ' as entities, so it renders as visible
+     *             source inside a <pre>, a <textarea> or an HTML attribute.
+     */
+    var ENTITY = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
+
+    function escapeEntities(text) {
+        return text.replace(/[&<>"']/g, function (character) {
+            return ENTITY[character];
+        });
+    }
+
+    function applyEscape(content, mode) {
+        if (mode === "json")     return JSON.stringify(content);
+        if (mode === "entities") return escapeEntities(content);
+        return content;
+    }
+
+    function escapeResult(result, mode) {
+        return Object.assign({}, result, {
+            escape:  mode,
+            content: applyEscape(result.content, mode)
+        });
+    }
+
+    /**
+     * The HTML pipeline, in the order the stages have to run:
+     *
+     *   GetFileHTML -> layout repair -> markup (clean | full) -> page box -> escaping
+     *
+     * Cleaning comes before the page box because the box is the host's frame, not the
+     * document's markup; escaping comes last because it turns markup into a payload and
+     * nothing can be done to it afterwards.
+     */
+    function buildHtml(fragment, options, source) {
+        var markup = (options.markup === "clean") ? cleanFragment(fragment) : fragment;
+
+        if (!options.frame) {
+            return Promise.resolve({
+                format:  "html",
+                content: markup,
+                meta:    { source: source, markup: options.markup }
+            });
+        }
+
+        return readDocumentMeta().then(function (meta) {
+            meta.source = source;
+            meta.markup = options.markup;
+            return {
+                format: "html",
+                // "full" is the fidelity path: the page box only holds its shape if every
+                // element inside it has had the host's own defaults zeroed first.
+                content: (options.markup === "clean")
+                    ? wrapInPage(markup, meta)
+                    : selfContainedHtml(markup, meta),
+                meta: meta
+            };
+        });
+    }
+
     function extract(request) {
         var options = normalizeSettings(Object.assign({}, settings, request.options || {}));
-        if (request.format) options.format = normalizeFormat(request.format);
+        if (request.format !== undefined) options.format = normalizeFormat(request.format);
+        if (request.markup !== undefined) options.markup = normalizeMarkup(request.markup);
+        if (request.escape !== undefined) options.escape = normalizeEscape(request.escape);
 
         var run = (options.format === "markdown") ? extractMarkdown : extractHtml;
 
@@ -544,17 +985,9 @@
             if (options.format === "markdown") {
                 return { format: "markdown", content: result.content, meta: { source: result.source } };
             }
-            if (!options.frame) {
-                return { format: "html", content: result.content, meta: { source: result.source } };
-            }
-            return readDocumentMeta().then(function (meta) {
-                meta.source = result.source;
-                return {
-                    format:  "html",
-                    content: selfContainedHtml(result.content, meta),
-                    meta:    meta
-                };
-            });
+            return buildHtml(result.content, options, result.source);
+        }).then(function (result) {
+            return escapeResult(result, options.escape);
         });
     }
 
@@ -722,6 +1155,9 @@
                         requestId: data.requestId,
                         ok:        true,
                         format:    result.format,
+                        // Which escaping content is in, so a host that did not ask for one
+                        // still knows whether it is holding markup or a payload.
+                        escape:    result.escape,
                         content:   result.content,
                         meta:      result.meta
                     });
