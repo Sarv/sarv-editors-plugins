@@ -7,12 +7,17 @@ It has no interface. The editor loads it in a hidden iframe alongside every docu
 from then on it:
 
 1. keeps the rule list up to date from the Sarv Drive content-policy endpoint;
-2. scans the whole document on a timer;
+2. scans the whole document on a timer — everywhere the editor's own search engine looks, not
+   only the body: tables, every section's headers and footers, footnotes and endnotes, the text
+   inside shapes and text boxes, and a presentation's speaker notes (see [`API.md`](../content-filter/API.md),
+   "What the scan reads");
 3. **highlights** every occurrence of every disallowed word, using the editor's own search
    highlight — no change is made to the document, nothing is written to the file and
    co-authors see nothing;
 4. **holds the save and the download shut**, with a message naming the words, until they
-   are gone;
+   are gone — and the message only promises a highlight when the editor could paint one (a word
+   inside a spreadsheet's text box cannot be marked, because that engine searches cells, not
+   runs, so it is named and blocked without being marked);
 5. **broadcasts** what it found, so the [Content Filter](../content-filter) panel can list
    it without scanning the document a second time.
 
@@ -30,13 +35,21 @@ over a `BroadcastChannel`.
 
 ## Protocol
 
-All messages carry `channel: "sarv-content-filter"`.
+All messages carry `channel: "sarv-content-filter"` and `documentKey` — which document the
+message is about. A `BroadcastChannel` reaches every tab of the same origin, so without the
+key a panel watching a text document would list the words found in the presentation open
+beside it; a message about another document is ignored by both halves.
+
+The key is `core.documentKey()`, resolved the same way on both sides: the key the editor
+opened the document under when the plugin frame can see the editor's window, otherwise an id
+minted inside the editor on its own `Api` object — which both halves reach through
+`callCommand` and which lives exactly as long as the open document does.
 
 Worker → panel:
 
 | `type` | payload |
 |---|---|
-| `scan` | `{ editorType, violations, words, blocked, at }` — after every scan |
+| `scan` | `{ documentKey, editorType, violations, words, blocked, at }` — after every scan |
 
 Panel → worker:
 
