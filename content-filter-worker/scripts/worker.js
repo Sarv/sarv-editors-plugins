@@ -51,6 +51,26 @@
     let channel        = null;
     let documentKey    = "";    // which document this worker's broadcasts are about
 
+    /**
+     * The editor starts a system plugin the moment it registers it, which is well before the
+     * file has finished opening - and an editor method called against a document that does not
+     * exist yet used to throw, which the editor reports to the user as a critical "an error has
+     * occurred while opening the file" and a reload prompt. So nothing this worker does touches
+     * the document until the editor says it is there.
+     *
+     * The event is declared in config.json, which is what makes the editor replay it to a plugin
+     * that started after the document was already ready - so this resolves either way round.
+     * The timeout is only a backstop for an editor build that does not send it at all: by then
+     * the document is long open, and sdkjs guards these methods against a null document anyway.
+     */
+    const documentReady = new Promise((resolve) => {
+        const timer = window.setTimeout(resolve, 20000);
+        window.Asc.plugin.attachEvent("onDocumentContentReady", () => {
+            window.clearTimeout(timer);
+            resolve();
+        });
+    });
+
     const editorMethod = (name, args) => {
         try {
             window.Asc.plugin.executeMethod(name, args || [], () => {});
@@ -325,6 +345,11 @@
         // Asked rather than assumed from the editor type: an older editor build has neither
         // method, and answering "word" there would leave the document unmarked.
         isEngineMarks = !!(await askEditor("IsContentPolicyMarksSupported"));
+
+        // Everything above answers without reading the document. Everything below marks it,
+        // scans it or blocks on it, so it waits for the document to exist - see documentReady.
+        await documentReady;
+
         if (isEngineMarks) await pushRulesToEngine();
 
         runScanCycle();

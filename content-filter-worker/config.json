@@ -61,6 +61,8 @@
             "initData": "",
             "isUpdateOleOnResize": false,
 
+            "events": ["onDocumentContentReady"],
+
             "store": {
                 "background": { "light": "#2E5BBA", "dark": "#2E5BBA" },
                 "screenshots": [],
