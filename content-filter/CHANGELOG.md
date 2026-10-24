@@ -2,6 +2,13 @@
 
 ---
 
+## v1.5.2
+
+### Bug fixes
+- **Remove All left a "cannot be saved" warning on screen over a clean document** — the panel removed one word per edit, so the document passed through states that still held the remaining words, and an autosave landing in one of them put up the save-blocked warning, sometimes once per word. The warnings stayed open after every word was gone, until dismissed or the page was reloaded. All the words now go in a single edit. The other half was the editor reporting the block before it had re-read the edit, which the Sarv document server fixes on its side; with an older server one warning can still appear.
+
+---
+
 ## v1.5.1
 
 ### Bug fixes

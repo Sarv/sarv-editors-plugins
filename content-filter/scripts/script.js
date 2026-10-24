@@ -221,93 +221,97 @@
     // One callCommand for every editor type, dispatching inside the editor:
     //   Word  → Api.GetDocument().SearchAndReplace
     //   Cell  → ApiRange.Replace on each sheet's used range
-    //   Slide → Api.GetPresentation().SearchAndReplace, or a paragraph walk where the
-    //           engine predates it (it arrived in 10.0)
+    //   Slide → Api.GetPresentation().SearchAndReplace, or a rewrite of the matching runs
+    //           where the engine predates it (it arrived in 10.0)
     // executeMethod('SearchAndReplace') is a Word-only plugin method: the cell and slide
     // engines do not have it, so the call there did nothing and Remove all removed nothing.
     // ─────────────────────────────────────────────────────────
-    function removeWordCommand() {
-        var word = Asc.scope.cfWord;
+    // Every word goes in one command, so the document passes from "has the words" to "has none"
+    // in a single edit. One command per word left an edit with some words still in it, and an
+    // autosave landing there reported the save as blocked on words that were about to go.
+    function removeWordsCommand() {
+        Asc.scope.cfWords.forEach(function (word) {
 
-        if (Asc.scope.cfEditorType === 'cell') {
-            Api.GetSheets().forEach(function (sheet) {
-                var range = sheet.GetUsedRange();
-                if (range) {
-                    range.Replace({
-                        What:        word,
-                        Replacement: '',
-                        LookAt:      'xlPart',
-                        MatchCase:   false,
-                        ReplaceAll:  true
-                    });
-                }
-            });
-            return;
-        }
-
-        if (Asc.scope.cfEditorType === 'slide') {
-            var presentation = Api.GetPresentation();
-            if (typeof presentation.SearchAndReplace === 'function') {
-                presentation.SearchAndReplace({ searchString: word, replaceString: '', matchCase: false });
+            if (Asc.scope.cfEditorType === 'cell') {
+                Api.GetSheets().forEach(function (sheet) {
+                    var range = sheet.GetUsedRange();
+                    if (range) {
+                        range.Replace({
+                            What:        word,
+                            Replacement: '',
+                            LookAt:      'xlPart',
+                            MatchCase:   false,
+                            ReplaceAll:  true
+                        });
+                    }
+                });
                 return;
             }
-            // Before 10.0 there is no presentation-wide replace, and ApiParagraph.Search needs the
-            // Word document, so rewrite each matching run in place (its formatting stays). A word
-            // split across two runs by a formatting change is not caught here.
-            var pattern = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
-            var removeInParagraph = function (paragraph) {
-                for (var index = 0; index < paragraph.GetElementsCount(); index++) {
-                    var run = paragraph.GetElement(index);
-                    if (!run || typeof run.ClearContent !== 'function') continue;
-                    var text = run.GetText();
-                    var cleaned = text.replace(pattern, '');
-                    if (cleaned === text) continue;
-                    run.ClearContent();
-                    if (cleaned) run.AddText(cleaned);
-                }
-            };
-            // Same drawings the scan reads (policy-core readPresentation): shapes, table
-            // cells and group children on the slides, not the layouts and masters.
-            var removeInContent = function (content) {
-                var count = content && content.GetElementsCount ? content.GetElementsCount() : 0;
-                for (var index = 0; index < count; index++) {
-                    var element = content.GetElement(index);
-                    if (element && typeof element.GetElementsCount === 'function' && typeof element.AddText === 'function') {
-                        removeInParagraph(element);
-                    }
-                }
-            };
-            var removeInDrawing = function (drawing) {
-                if (!drawing) return;
-                var reader = drawing.GetDocContent || drawing.GetContent;
-                if (typeof reader === 'function') removeInContent(reader.call(drawing));
-                if (typeof drawing.GetRowsCount === 'function') {
-                    for (var row = 0; row < drawing.GetRowsCount(); row++) {
-                        var tableRow = drawing.GetRow(row);
-                        for (var cell = 0; cell < tableRow.GetCellsCount(); cell++) removeInDrawing(tableRow.GetCell(cell));
-                    }
-                } else if (typeof drawing.GetAllDrawings === 'function') {
-                    drawing.GetAllDrawings().forEach(removeInDrawing);
-                }
-            };
-            presentation.GetAllSlides().forEach(function (slide) { slide.GetAllDrawings().forEach(removeInDrawing); });
-            return;
-        }
 
-        Api.GetDocument().SearchAndReplace({
-            searchString:  word,
-            replaceString: '',
-            matchCase:     false,
-            matchWord:     false
+            if (Asc.scope.cfEditorType === 'slide') {
+                var presentation = Api.GetPresentation();
+                if (typeof presentation.SearchAndReplace === 'function') {
+                    presentation.SearchAndReplace({ searchString: word, replaceString: '', matchCase: false });
+                    return;
+                }
+                // Before 10.0 there is no presentation-wide replace, and ApiParagraph.Search needs the
+                // Word document, so rewrite each matching run in place (its formatting stays). A word
+                // split across two runs by a formatting change is not caught here.
+                var pattern = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                var removeInParagraph = function (paragraph) {
+                    for (var index = 0; index < paragraph.GetElementsCount(); index++) {
+                        var run = paragraph.GetElement(index);
+                        if (!run || typeof run.ClearContent !== 'function') continue;
+                        var text = run.GetText();
+                        var cleaned = text.replace(pattern, '');
+                        if (cleaned === text) continue;
+                        run.ClearContent();
+                        if (cleaned) run.AddText(cleaned);
+                    }
+                };
+                // Same drawings the scan reads (policy-core readPresentation): shapes, table
+                // cells and group children on the slides, not the layouts and masters.
+                var removeInContent = function (content) {
+                    var count = content && content.GetElementsCount ? content.GetElementsCount() : 0;
+                    for (var index = 0; index < count; index++) {
+                        var element = content.GetElement(index);
+                        if (element && typeof element.GetElementsCount === 'function' && typeof element.AddText === 'function') {
+                            removeInParagraph(element);
+                        }
+                    }
+                };
+                var removeInDrawing = function (drawing) {
+                    if (!drawing) return;
+                    var reader = drawing.GetDocContent || drawing.GetContent;
+                    if (typeof reader === 'function') removeInContent(reader.call(drawing));
+                    if (typeof drawing.GetRowsCount === 'function') {
+                        for (var row = 0; row < drawing.GetRowsCount(); row++) {
+                            var tableRow = drawing.GetRow(row);
+                            for (var cell = 0; cell < tableRow.GetCellsCount(); cell++) removeInDrawing(tableRow.GetCell(cell));
+                        }
+                    } else if (typeof drawing.GetAllDrawings === 'function') {
+                        drawing.GetAllDrawings().forEach(removeInDrawing);
+                    }
+                };
+                presentation.GetAllSlides().forEach(function (slide) { slide.GetAllDrawings().forEach(removeInDrawing); });
+                return;
+            }
+
+            Api.GetDocument().SearchAndReplace({
+                searchString:  word,
+                replaceString: '',
+                matchCase:     false,
+                matchWord:     false
+            });
         });
     }
 
-    function removeWord(word, callback) {
+    function removeWords(words, callback) {
         // The command is serialised as a string, so it reaches its inputs through Asc.scope.
         window.Asc.scope              = window.Asc.scope || {};
-        window.Asc.scope.cfWord       = word;
+        window.Asc.scope.cfWords      = words;
         window.Asc.scope.cfEditorType = editorType();
-        runDocCmd(removeWordCommand, callback || function () {});
+        runDocCmd(removeWordsCommand, callback || function () {});
     }
 
     /**
@@ -326,11 +330,6 @@
             if (!seen[lo]) { seen[lo] = true; words.push(v.matched); }
         });
         return words;
-    }
-
-    function removeWordsSequential(words, idx, onDone) {
-        if (idx >= words.length) { if (onDone) onDone(); return; }
-        removeWord(words[idx], function () { removeWordsSequential(words, idx + 1, onDone); });
     }
 
     function executeRemoval(allViolations, source) {
@@ -352,7 +351,7 @@
         setButtonsEnabled(false);
         D.removingStatus.classList.remove('display-none');
 
-        removeWordsSequential(words, 0, function () {
+        removeWords(words, function () {
             D.removingStatus.classList.add('display-none');
             setButtonsEnabled(true);
             addToRemovalHistory(wordsWithMeta, source);
@@ -737,7 +736,7 @@
                     break;
                 }
             }
-            removeWord(word, function () {
+            removeWords([word], function () {
                 currentViolations = currentViolations.filter(function (v) {
                     return v.matched.toLowerCase() !== word.toLowerCase();
                 });
