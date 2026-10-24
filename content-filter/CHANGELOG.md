@@ -2,6 +2,13 @@
 
 ---
 
+## v1.5.1
+
+### Bug fixes
+- **Remove All removed nothing in spreadsheets and presentations** — removal went through the plugin method `SearchAndReplace`, which only the text editor implements; the spreadsheet and presentation editors ignored the call, so the panel reported the words as removed while every one of them stayed in the file. Removal now runs as a document command in every editor: a spreadsheet replaces the word in the used range of every sheet (cells only — text boxes stay report-only, as in v1.5.0), and a presentation uses the editor's presentation-wide replace on 10.0 and later. On an older editor, which has no such replace, it rewrites each text run that contains the word, keeping the run's formatting; a word split across two differently formatted runs is not caught there and stays listed after the removal.
+
+---
+
 ## v1.5.0
 
 ### Bug fixes

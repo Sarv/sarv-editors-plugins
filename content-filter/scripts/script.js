@@ -70,12 +70,6 @@
         return (window.Asc.plugin.info && window.Asc.plugin.info.editorType) || '';
     }
 
-    // Used only by removeWord to pick the right removal API per editor type.
-    function isWordEditor() {
-        var t = editorType();
-        return t !== 'cell' && t !== 'slide';
-    }
-
     // ─────────────────────────────────────────────────────────
     // callCommand wrapper
     // Uses the 4-argument form: callCommand(fn, bSilent, bAsync, callback)
@@ -224,32 +218,96 @@
 
     // ─────────────────────────────────────────────────────────
     // Remove violations
-    // Works in all editor types:
-    //   Word/PDF  → callCommand + Api.GetDocument().SearchAndReplace
-    //   Cell/Slide → executeMethod('SearchAndReplace', …)
+    // One callCommand for every editor type, dispatching inside the editor:
+    //   Word  → Api.GetDocument().SearchAndReplace
+    //   Cell  → ApiRange.Replace on each sheet's used range
+    //   Slide → Api.GetPresentation().SearchAndReplace, or a paragraph walk where the
+    //           engine predates it (it arrived in 10.0)
+    // executeMethod('SearchAndReplace') is a Word-only plugin method: the cell and slide
+    // engines do not have it, so the call there did nothing and Remove all removed nothing.
     // ─────────────────────────────────────────────────────────
-    function removeWord(word, callback) {
-        if (isWordEditor()) {
-            // Word must be embedded via Asc.scope — closures aren't available
-            // inside callCommand because it is serialised as a string.
-            window.Asc.scope        = window.Asc.scope || {};
-            window.Asc.scope.cfWord = word;
-            runDocCmd(function () {
-                Api.GetDocument().SearchAndReplace({
-                    searchString:  Asc.scope.cfWord,
-                    replaceString: '',
-                    matchCase:     false,
-                    matchWord:     false
-                });
-            }, callback || function () {});
-        } else {
-            // Spreadsheet / presentation editors
-            window.Asc.plugin.executeMethod('SearchAndReplace', [{
-                searchString:  word,
-                replaceString: '',
-                matchCase:     false
-            }], callback || function () {});
+    function removeWordCommand() {
+        var word = Asc.scope.cfWord;
+
+        if (Asc.scope.cfEditorType === 'cell') {
+            Api.GetSheets().forEach(function (sheet) {
+                var range = sheet.GetUsedRange();
+                if (range) {
+                    range.Replace({
+                        What:        word,
+                        Replacement: '',
+                        LookAt:      'xlPart',
+                        MatchCase:   false,
+                        ReplaceAll:  true
+                    });
+                }
+            });
+            return;
         }
+
+        if (Asc.scope.cfEditorType === 'slide') {
+            var presentation = Api.GetPresentation();
+            if (typeof presentation.SearchAndReplace === 'function') {
+                presentation.SearchAndReplace({ searchString: word, replaceString: '', matchCase: false });
+                return;
+            }
+            // Before 10.0 there is no presentation-wide replace, and ApiParagraph.Search needs the
+            // Word document, so rewrite each matching run in place (its formatting stays). A word
+            // split across two runs by a formatting change is not caught here.
+            var pattern = new RegExp(word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+            var removeInParagraph = function (paragraph) {
+                for (var index = 0; index < paragraph.GetElementsCount(); index++) {
+                    var run = paragraph.GetElement(index);
+                    if (!run || typeof run.ClearContent !== 'function') continue;
+                    var text = run.GetText();
+                    var cleaned = text.replace(pattern, '');
+                    if (cleaned === text) continue;
+                    run.ClearContent();
+                    if (cleaned) run.AddText(cleaned);
+                }
+            };
+            // Same drawings the scan reads (policy-core readPresentation): shapes, table
+            // cells and group children on the slides, not the layouts and masters.
+            var removeInContent = function (content) {
+                var count = content && content.GetElementsCount ? content.GetElementsCount() : 0;
+                for (var index = 0; index < count; index++) {
+                    var element = content.GetElement(index);
+                    if (element && typeof element.GetElementsCount === 'function' && typeof element.AddText === 'function') {
+                        removeInParagraph(element);
+                    }
+                }
+            };
+            var removeInDrawing = function (drawing) {
+                if (!drawing) return;
+                var reader = drawing.GetDocContent || drawing.GetContent;
+                if (typeof reader === 'function') removeInContent(reader.call(drawing));
+                if (typeof drawing.GetRowsCount === 'function') {
+                    for (var row = 0; row < drawing.GetRowsCount(); row++) {
+                        var tableRow = drawing.GetRow(row);
+                        for (var cell = 0; cell < tableRow.GetCellsCount(); cell++) removeInDrawing(tableRow.GetCell(cell));
+                    }
+                } else if (typeof drawing.GetAllDrawings === 'function') {
+                    drawing.GetAllDrawings().forEach(removeInDrawing);
+                }
+            };
+            presentation.GetAllSlides().forEach(function (slide) { slide.GetAllDrawings().forEach(removeInDrawing); });
+            return;
+        }
+
+        Api.GetDocument().SearchAndReplace({
+            searchString:  word,
+            replaceString: '',
+            matchCase:     false,
+            matchWord:     false
+        });
+    }
+
+    function removeWord(word, callback) {
+        // The command is serialised as a string, so it reaches its inputs through Asc.scope.
+        window.Asc.scope              = window.Asc.scope || {};
+        window.Asc.scope.cfWord       = word;
+        window.Asc.scope.cfEditorType = editorType();
+        runDocCmd(removeWordCommand, callback || function () {});
     }
 
     /**
