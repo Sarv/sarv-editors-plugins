@@ -13,12 +13,14 @@ const vocUrl = './vendor/GPT-3-Encoder/vocabulary.bpe';
 const encUrl = './vendor/GPT-3-Encoder/encoder.json';
 
 
-fetchResources(vocUrl);
-fetchResources(encUrl);
+// The vocabulary is 1.5 MB to download and parse, and this script is loaded by the plugin's
+// background page, which runs with every document on the editor's own main thread. So nothing is
+// fetched until the first caller asks for the encoder: encode() works only once this has resolved.
+let readyPromise = null;
 
 function fetchResources(url) {
 	let flag = url.includes('vocabulary.bpe');
-	fetch(url, {
+	return fetch(url, {
 		method: 'GET'
 	})
 	.then(function(response) {
@@ -30,12 +32,22 @@ function fetchResources(url) {
 		} else {
 			encoder = data;
 		}
-	})
-	.catch(function(error) {
-		console.error('Error:', error);
-	}).finally(function(){
-		init();
 	});
+};
+
+function ready() {
+	if (!readyPromise) {
+		readyPromise = Promise.all([fetchResources(vocUrl), fetchResources(encUrl)])
+			.then(function() {
+				init();
+			})
+			.catch(function(error) {
+				// Let the next caller try again rather than caching the failure.
+				readyPromise = null;
+				throw error;
+			});
+	}
+	return readyPromise;
 };
 
 const range = (x, y) => {
@@ -208,5 +220,6 @@ function decode(tokens) {
 };
 
 window.Asc = window.Asc || {};
+window.Asc.OpenAIEncoderReady = ready;
 window.Asc.OpenAIEncode = encode;
 window.Asc.OpenAIDecode = decode;

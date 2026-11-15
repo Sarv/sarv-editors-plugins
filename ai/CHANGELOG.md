@@ -162,3 +162,6 @@
 
 ## 3.2.2
 * Add support 9.4.0+ server settings.
+
+## 3.2.3
+* The tokenizer vocabulary (1.5 MB) is fetched on first use instead of with every document, removing a ~200 ms freeze on slow machines right after a document opens.

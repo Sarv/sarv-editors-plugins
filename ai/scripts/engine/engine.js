@@ -580,6 +580,8 @@ function fetchExternal(url, options, isStreaming) {
 			isNoSplit = true;
 
 		let input_len = content.length;
+		if (!isMessages)
+			await Asc.OpenAIEncoderReady();
 		let input_tokens = isMessages ? 0 : Asc.OpenAIEncode(content).length;
 		
 		let messages = [];

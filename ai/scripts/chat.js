@@ -542,8 +542,15 @@
 				clearTimeout(tokenTimeot);
 				tokenTimeot = null;
 			}
-			tokenTimeot = setTimeout(function() {
+			tokenTimeot = setTimeout(async function() {
 				let text = event.target.value.trim();
+				try {
+					await window.Asc.OpenAIEncoderReady();
+				} catch (error) {
+					// No vocabulary, no count: leave the counter as it was rather than guess.
+					console.error('Tokenizer unavailable:', error);
+					return;
+				}
 				let tokens = window.Asc.OpenAIEncode(text);
 				if (tokens.length > maxTokens) {
 					event.target.classList.add('error_border');
