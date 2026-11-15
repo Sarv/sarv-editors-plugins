@@ -2,6 +2,13 @@
 
 ---
 
+## v1.5.3
+
+### Improvements
+- **The panel no longer rereads an unchanged document** — with no worker running, the panel's own timer and every cursor move read the whole document again, edited or not, which on a large spreadsheet froze the editor for a moment each time. Those scans now read the text only when the document has changed since the last one (the stamp the worker uses, from the shared core), and otherwise put the last full result back on screen. **Scan document** and a rule-list refresh still always read it in full.
+
+---
+
 ## v1.5.2
 
 ### Bug fixes

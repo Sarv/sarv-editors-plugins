@@ -46,6 +46,7 @@
     let isPainted      = false; // whether the last highlight actually marked anything
     let isEngineMarks  = false; // whether the editor marks and blocks on its own (see the header)
     let isScanning     = false;
+    let lastScanned    = null;  // {revision, at} of the last scan that read the document
     let scanTimer      = null;
     let scanIntervalMs = core.DEFAULT_SCAN_MS;
     let channel        = null;
@@ -233,11 +234,24 @@
         });
     };
 
-    const scanNow = async () => {
-        if (isScanning) return;
+    /**
+     * Reads the whole document and scans it.
+     * @param {boolean} [isForced] - Scan even when the document has not changed since the last
+     * scan: the rules changed, so the same text can now give a different answer. Otherwise an
+     * unchanged document is skipped (core.isScanDue) - reading it is the expensive part, and on a
+     * large document it froze the editor every few seconds while nobody was typing.
+     * @returns {Promise<boolean>} whether the document was read (and the result broadcast).
+     */
+    const scanNow = async (isForced) => {
+        if (isScanning) return false;
         isScanning = true;
 
         try {
+            // Read before the text, so an edit made while the text is being read moves the
+            // stamp past this one and is picked up by the next scan.
+            const revision = await core.documentRevision();
+            if (!isForced && !core.isScanDue(revision, lastScanned, Date.now(), core.MAX_UNCHANGED_SCAN_MS)) return false;
+
             const text = await core.collectDocumentText(editorType, SCAN_TIMEOUT_MS);
 
             // No text at all means the editor does not hand its content to a plugin - the pdf
@@ -251,7 +265,9 @@
                 await applyToEditor(core.matchedWords(violations), true);
             }
 
+            lastScanned = { revision: revision, at: Date.now() };
             publish();
+            return true;
         } catch (error) {
             // A scan that could not read the document says nothing about the document, so the
             // previous verdict stands rather than the block being lifted on an error.
@@ -292,7 +308,7 @@
             // The editor's copy first: it is what marks the document and refuses the save, and
             // it should not be a scan behind the rules it is enforcing.
             await pushRulesToEngine();
-            await scanNow();
+            await scanNow(true);
         } catch (error) {
             // The cached rules stay in force: a policy that cannot be refreshed is still a
             // policy, and going quiet on a network error would be the wrong way to fail.
@@ -308,7 +324,9 @@
 
         switch (message.type) {
             case "requestScan":
-                scanNow();
+                // The panel asks on every selection change, which is no reason to read an
+                // unchanged document again - and the answer it wants is broadcast either way.
+                scanNow().then((isScanned) => { if (!isScanned) publish(); });
                 break;
             case "requestState":
                 publish();

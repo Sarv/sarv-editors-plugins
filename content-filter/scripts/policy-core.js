@@ -79,6 +79,8 @@
 
     const DEFAULT_CACHE_HRS = 24;
     const DEFAULT_SCAN_MS   = 3000;
+    // An unchanged document is still read again this often - see isScanDue.
+    const MAX_UNCHANGED_SCAN_MS = 30000;
 
     // Both plugins are served from the same origin, so a BroadcastChannel reaches from one
     // hidden iframe to the other without going through the editor.
@@ -565,6 +567,83 @@
         }
     });
 
+    // ── telling whether the document changed ───────────────────────────────────────────
+    /**
+     * A stamp of the document's state, read inside the editor through callCommand. It changes
+     * whenever the document does - a new undo point, more changes in the current one, an undo or
+     * a redo, a co-author's change arriving - and costs nothing to read, where the full read
+     * above walks every paragraph or every cell. On a large spreadsheet that read froze the
+     * editor for a noticeable moment on every scan; with this, a document nobody is touching is
+     * not read again.
+     *
+     * Undo points and the co-editing change list are engine internals, not builder API, so
+     * anything unexpected answers "" - and "" means "unknown", which always scans.
+     *
+     * Every callCommand - this one included - runs inside an undo point the editor opens for it
+     * (asc_canPaste in cells, StartAction in text and slides) and drops again if left empty. So
+     * Points[Index] is always that fresh point, stamped with the current time, and the newest
+     * real one is the point below it. Opening it also cuts off any redo points, so the length of
+     * the list says nothing the index does not.
+     */
+    const revisionCommand = function () {
+        const history = AscCommon.History;
+        if (!history || !Array.isArray(history.Points)) return "";
+
+        const point = history.Points[history.Index - 1];
+        const coEditing = AscCommon.CollaborativeEditing;
+        const coChanges = coEditing && coEditing.CoHistory && Array.isArray(coEditing.CoHistory.Changes)
+            ? coEditing.CoHistory.Changes.length
+            : -1;
+
+        return [
+            history.Index,
+            point ? point.Time : 0,
+            point && point.Items ? point.Items.length : 0,
+            coChanges
+        ].join(":");
+    };
+
+    /**
+     * The document's current revision stamp, or "" when it cannot be told.
+     * @param {number} [timeoutMs]
+     * @returns {Promise<string>}
+     */
+    const documentRevision = (timeoutMs) => new Promise((resolve) => {
+        let settled = false;
+        const finish = (revision) => {
+            if (settled) return;
+            settled = true;
+            resolve(typeof revision === "string" ? revision : "");
+        };
+
+        const timer = window.setTimeout(() => finish(""), timeoutMs || 2000);
+
+        try {
+            // isCalc false for the same reason as the text read: reading changes nothing.
+            window.Asc.plugin.callCommand(revisionCommand, false, false, (revision) => {
+                window.clearTimeout(timer);
+                finish(revision);
+            });
+        } catch (error) {
+            window.clearTimeout(timer);
+            finish("");
+        }
+    });
+
+    /**
+     * Whether a document last scanned at `scanned` needs scanning again. An unknown stamp always
+     * does. A known, unchanged one still does once `maxAgeMs` has passed since that scan: a
+     * change the stamp cannot see (a co-author's edit in an engine that does not log it) then
+     * waits at most that long instead of forever.
+     * @param {string} revision - documentRevision's answer now.
+     * @param {{revision: string, at: number}|null} scanned - the stamp the last scan read, and when.
+     * @param {number} now
+     * @param {number} maxAgeMs
+     * @returns {boolean}
+     */
+    const isScanDue = (revision, scanned, now, maxAgeMs) =>
+        !revision || !scanned || revision !== scanned.revision || (now - scanned.at) >= maxAgeMs;
+
     // ── reading the document the editor's own way ─────────────────────────────────────
     /**
      * The disallowed terms the editor's own search engine finds, highlighting them on the way.
@@ -828,6 +907,7 @@
         CHANNEL_NAME:        CHANNEL_NAME,
         DEFAULT_CACHE_HRS:   DEFAULT_CACHE_HRS,
         DEFAULT_SCAN_MS:     DEFAULT_SCAN_MS,
+        MAX_UNCHANGED_SCAN_MS: MAX_UNCHANGED_SCAN_MS,
 
         OPTIONS_KEY:         OPTIONS_KEY,
 
@@ -850,6 +930,8 @@
         escapeForRegExp:     escapeForRegExp,
         matchedWords:        matchedWords,
         collectDocumentText: collectDocumentText,
+        documentRevision:    documentRevision,
+        isScanDue:           isScanDue,
         detectWithEditorSearch: detectWithEditorSearch,
         canPluginEditText:   canPluginEditText,
         groupViolations:     groupViolations,

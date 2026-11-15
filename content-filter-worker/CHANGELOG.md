@@ -2,6 +2,13 @@
 
 ---
 
+## v1.1.1
+
+### Improvements
+- **An untouched document is no longer read again every few seconds** — the timer read the whole document on every scan, edited or not. On a 20,000-row spreadsheet each read froze the editor for 100–200 ms every three seconds while nobody was typing, which a slow laptop felt as a sluggish editor (measured with the CPU slowed six-fold: 870 ms of every 10 s spent on the reads; now 17 ms, against 9 ms with the plugin switched off). Each scan now first asks the editor for a cheap stamp of the document's undo history and co-editing changes, and reads the text only when that stamp has moved: after an edit, an undo or redo, or a co-author's change. A changed rule list always forces a full rescan, and an unchanged document is still read once every 30 s as a backstop. A banned word is caught exactly as fast as before.
+
+---
+
 ## v1.1.0
 
 ### Bug fixes

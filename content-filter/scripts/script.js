@@ -59,6 +59,7 @@
     var isFirstInit        = true;
     var currentViolations  = [];
     var lastScanAt         = 0;
+    var lastScanned        = null;   // {revision, at, violations} of the last full read
     var scanDebounce       = null;
     var countdownInterval  = null;
     var scanIntervalHandle = null;
@@ -173,13 +174,18 @@
     // ─────────────────────────────────────────────────────────
     // Auto-scan  — works for all editor types
     // ─────────────────────────────────────────────────────────
-    function onScanDone(docText) {
+    function onScanDone(revision, docText) {
+        var violations = scanText(docText || '');
+        lastScanned   = { revision: revision, at: Date.now(), violations: violations };
         isScanRunning = false;
         setScanIndicator(false);
-        updateViolationDisplay(scanText(docText || ''));
+        updateViolationDisplay(violations);
     }
 
-    function triggerFullScan() {
+    // isForced scans even an unchanged document - the Scan button and a rules change, where
+    // the same text can now give a different answer. Otherwise an unchanged document is not
+    // read again (core.isScanDue): on a large one each read froze the editor for a moment.
+    function triggerFullScan(isForced) {
         if (isScanRunning) return;
         // Nothing to scan where a plugin cannot reach the text: the collector would answer ''
         // and this panel would then paint "no violations" over what the system worker found
@@ -187,11 +193,24 @@
         if (!core.canPluginEditText(editorType())) return;
         isScanRunning = true;
         lastScanAt    = Date.now();
-        setScanIndicator(true);
 
-        // The core picks the collector for this editor and carries its own timeout, answering
-        // '' rather than hanging - so the safety timer this used to need has gone with it.
-        core.collectDocumentText(editorType(), 10000).then(onScanDone);
+        // The stamp is read before the text, so an edit made while the text is being read
+        // moves it past this one and the next scan picks that edit up.
+        core.documentRevision().then(function (revision) {
+            if (!isForced && !core.isScanDue(revision, lastScanned, Date.now(), core.MAX_UNCHANGED_SCAN_MS)) {
+                isScanRunning = false;
+                // A selection change may have painted just its paragraph's verdict; put the
+                // whole document's back, which is still current.
+                updateViolationDisplay(lastScanned.violations);
+                return;
+            }
+            setScanIndicator(true);
+            // The core picks the collector for this editor and carries its own timeout,
+            // answering '' rather than hanging.
+            core.collectDocumentText(editorType(), 10000).then(function (docText) {
+                onScanDone(revision, docText);
+            });
+        });
     }
 
     function triggerSelectedScan(text) {
@@ -200,7 +219,7 @@
     }
 
     function startAutoScan() {
-        triggerFullScan();
+        triggerFullScan(true);
         // Interval fallback: catches edits where the cursor doesn't move. Skipped entirely
         // while a worker is broadcasting - it is already scanning the same document, and two
         // scanners would only fight over callCommand.
@@ -667,7 +686,7 @@
 
         D.btnScanDoc.addEventListener('click', function () {
             stopCountdown();
-            triggerFullScan();
+            triggerFullScan(true);
         });
 
         D.btnRemoveAll.addEventListener('click', function () {
