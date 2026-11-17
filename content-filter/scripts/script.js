@@ -220,15 +220,20 @@
 
     function startAutoScan() {
         triggerFullScan(true);
-        // Interval fallback: catches edits where the cursor doesn't move. Skipped entirely
-        // while a worker is broadcasting - it is already scanning the same document, and two
-        // scanners would only fight over callCommand.
+        // Interval fallback: catches edits where the cursor doesn't move. While a worker is
+        // broadcasting it asks the worker instead of scanning here - two scanners would only
+        // fight over callCommand. Where the editor marks the words itself the worker reads the
+        // document only while a panel keeps asking, so these asks are what keep the list
+        // current, and what keep the worker answering.
         var cfg      = getConfig();
         var interval = cfg.scanIntervalMs !== undefined ? cfg.scanIntervalMs : DEFAULT_SCAN_MS;
         if (interval > 0) {
             if (scanIntervalHandle) clearInterval(scanIntervalHandle);
             scanIntervalHandle = setInterval(function () {
-                if (isWorkerLive()) return;
+                if (isWorkerLive()) {
+                    publishToWorker({ type: 'requestScan' });
+                    return;
+                }
                 if (!isScanRunning && (Date.now() - lastScanAt) > Math.max(interval - 500, 1500))
                     triggerFullScan();
             }, interval);
@@ -861,13 +866,28 @@
         // open in the next tab happens to hold.
         if (!core.isSameDocument(currentDocId, message, editorType())) return;
 
+        var wasWorkerLive = isWorkerLive();
         lastWorkerScanAt = Date.now();
 
         // The worker scanned the whole document with the same rules and the same core, so its
         // violations are this panel's violations. Its own scan is left running as the fallback
         // for the moment the worker stops answering.
         setScanIndicator(false);
-        updateViolationDisplay(message.violations || []);
+        // The worker answers every tick of the timer above, mostly with the list already on
+        // screen; rebuilding it then would only swallow a click landing on a row mid-rebuild.
+        // Its first answer is always drawn, whatever the list held before it.
+        var violations = message.violations || [];
+        if (!wasWorkerLive || !sameViolations(violations, currentViolations)) updateViolationDisplay(violations);
+    }
+
+    function sameViolations(left, right) {
+        if (!left || !right || left.length !== right.length) return false;
+        return left.every(function (violation, index) {
+            var other = right[index];
+            return violation.matched === other.matched
+                && violation.index === other.index
+                && violation.snippet === other.snippet;
+        });
     }
 
     function initChannel() {

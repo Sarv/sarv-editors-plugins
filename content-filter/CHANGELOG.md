@@ -2,6 +2,14 @@
 
 ---
 
+## v1.5.4
+
+### Improvements
+- **The list stays current while the worker scans on demand** — the worker now reads the document only while a panel asks (see Content Filter Worker v1.1.2), so the panel's timer, which used to stand idle whenever the worker was running, now sends it a scan request on every tick.
+- **An unchanged result no longer redraws the list** — the worker answers every few seconds, and each answer rebuilt the list and restarted the auto-remove countdown even when nothing had changed. The list is now redrawn only when the words, positions or snippets differ.
+
+---
+
 ## v1.5.3
 
 ### Improvements
