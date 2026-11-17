@@ -11,16 +11,15 @@
  *   3. broadcasts what it found, so the Content Filter panel can list it without rescanning.
  *
  * How the first two are done depends on the editor. Where the editor can mark the document
- * itself (SetContentPolicyTerms - the document editor), the rules are simply handed over: the
- * engine then marks every occurrence with an orange double wave that survives editing, explains
- * the mark on hover, re-reads only the paragraph that changed, and moves the block itself. The
- * scan below then only reads the document to list the violations for the panel - it neither
- * marks nor blocks, which is why typing no longer drops the marking on the rest of the document
- * and why the marking of a newly typed word no longer waits for the next scan.
+ * itself (SetContentPolicyTerms - the document, spreadsheet and presentation editors), the rules
+ * are simply handed over: the engine then marks every occurrence with an orange double wave that
+ * survives editing, explains the mark on hover, re-reads only what changed, and moves the block
+ * itself. A scan there only reads the document to list the violations for the panel - it neither
+ * marks nor blocks - so it runs only while a panel is asking for it (see isScanForPanelOnly).
  *
- * Where the editor cannot (spreadsheet, presentation, pdf), the older path stands: highlight the
- * matches the way the search panel does, repaint that highlight whenever an edit has made the
- * editor drop it, and set the block from here.
+ * Where the editor cannot (pdf, or an older build), the older path stands: scan on the timer,
+ * highlight the matches the way the search panel does, repaint that highlight whenever an edit
+ * has made the editor drop it, and set the block from here.
  *
  * All of these are editor methods reserved for system plugins - see
  * Api#pluginMethod_SetContentPolicyTerms, Api#pluginMethod_HighlightTerms and
@@ -37,6 +36,9 @@
 
     const MIN_SCAN_MS = 1500;   // a floor on the timer, whatever the configured interval says
     const SCAN_TIMEOUT_MS = 10000;
+    // How long after its last request a panel still counts as open. The panel asks on every
+    // tick of its own timer, so this only has to outlast a few missed ticks.
+    const PANEL_SILENCE_MS = 15000;
 
     let rules          = core.emptyRules();
     let editorType     = "word";
@@ -51,6 +53,7 @@
     let scanIntervalMs = core.DEFAULT_SCAN_MS;
     let channel        = null;
     let documentKey    = "";    // which document this worker's broadcasts are about
+    let lastPanelAt    = 0;     // when this document's panel last asked for anything
 
     /**
      * The editor starts a system plugin the moment it registers it, which is well before the
@@ -252,7 +255,11 @@
             const revision = await core.documentRevision();
             if (!isForced && !core.isScanDue(revision, lastScanned, Date.now(), core.MAX_UNCHANGED_SCAN_MS)) return false;
 
-            const text = await core.collectDocumentText(editorType, SCAN_TIMEOUT_MS);
+            // The pdf editor never hands its page text to a plugin, so asking for it there is a
+            // round trip into the editor that can only answer ''.
+            const text = core.canPluginEditText(editorType)
+                ? await core.collectDocumentText(editorType, SCAN_TIMEOUT_MS)
+                : "";
 
             // No text at all means the editor does not hand its content to a plugin - the pdf
             // editor, whose pages expose annotations and widgets but never their text. There the
@@ -295,8 +302,23 @@
         scanTimer = window.setTimeout(runScanCycle, Math.max(scanIntervalMs, MIN_SCAN_MS));
     };
 
+    const isPanelListening = (now) => (now - lastPanelAt) < PANEL_SILENCE_MS;
+
+    /**
+     * Whether a scan would only feed the panel's list. Where the engine marks and blocks on its
+     * own copy of the rules (applyToEditor returns straight away), reading the document changes
+     * nothing in the editor: the save is held or released by the engine whether this worker
+     * scans or not. With no panel open there is then nobody to read it for - and every read is a
+     * call into the editor, which on a 20,000-row spreadsheet froze it for 100-300 ms after each
+     * edit, and in a presentation recalculated the current slide every three seconds.
+     */
+    const isScanForPanelOnly = (now) => isEngineMarks && !isPanelListening(now);
+
     const runScanCycle = async () => {
-        await scanNow();
+        // An open panel asks on every tick of its own timer (requestScan), so in that mode the
+        // timer here has nothing to add. It keeps ticking for the moment the engine stops
+        // marking (a rules push that came back empty), when the older path needs it again.
+        if (!isEngineMarks) await scanNow();
         scheduleNextScan();
     };
 
@@ -308,6 +330,13 @@
             // The editor's copy first: it is what marks the document and refuses the save, and
             // it should not be a scan behind the rules it is enforcing.
             await pushRulesToEngine();
+            if (isScanForPanelOnly(Date.now())) {
+                // Nobody to list the result for. Forgetting the last scan makes the panel's first
+                // request read the document again, rather than be answered with the verdict the
+                // old rules gave on an unchanged document.
+                lastScanned = null;
+                return;
+            }
             await scanNow(true);
         } catch (error) {
             // The cached rules stay in force: a policy that cannot be refreshed is still a
@@ -322,14 +351,21 @@
         // A request from the panel of another document is that worker's to answer, not this one's.
         if (!core.isSameDocument(documentKey, message, editorType)) return;
 
+        // Any request means a panel is open, which is what a rules refresh goes by.
+        lastPanelAt = Date.now();
+
         switch (message.type) {
             case "requestScan":
-                // The panel asks on every selection change, which is no reason to read an
-                // unchanged document again - and the answer it wants is broadcast either way.
-                scanNow().then((isScanned) => { if (!isScanned) publish(); });
-                break;
             case "requestState":
-                publish();
+                // The panel asks on every selection change and every tick of its timer, which is
+                // no reason to read an unchanged document again - and the answer it wants is
+                // broadcast either way. A panel that just opened is answered the same way: where
+                // the engine marks, nothing has scanned since the panel last closed, so the last
+                // broadcast may well be stale.
+                // Held until the document exists, like every other read (see documentReady).
+                documentReady
+                    .then(() => scanNow())
+                    .then((isScanned) => { if (!isScanned) publish(); });
                 break;
             case "rulesChanged":
                 refreshRules();

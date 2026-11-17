@@ -2,6 +2,15 @@
 
 ---
 
+## v1.1.2
+
+### Improvements
+- **Word, presentation and spreadsheet editors no longer read the document on every edit when nobody is looking** — in those editors the engine itself marks a banned word and holds the save the moment it is typed or pasted, and releases it once the word is gone; the worker's timed read only fed the Content Filter panel's list. Yet it kept reading after every change with no panel open, and the cost was large: on a 20,000-row spreadsheet about 300 ms per read (650 ms of plugin time per paste with the CPU slowed four-fold), on a slide the editor redraws every slide after each plugin command (88 ms every 4.5 s while idle), in a text document about 45 ms per edit. The worker now reads only while a panel is asking (it stops 15 s after the panel's last request), so plugin time per edit drops to 0 ms in all three editors. The save hold does not depend on these reads and is unchanged. The PDF editor, and builds without engine marks, keep timed scanning exactly as before.
+- **The PDF editor no longer reads text it cannot use** — the PDF scan searches the pages with the editor's own search, so the separate document text read that went with every PDF scan is skipped.
+- **A panel opened mid-session gets a fresh result** — `requestState` now rescans when the document has changed, instead of always resending the last scan.
+
+---
+
 ## v1.1.1
 
 ### Improvements

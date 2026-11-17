@@ -49,14 +49,21 @@ Worker → panel:
 
 | `type` | payload |
 |---|---|
-| `scan` | `{ documentKey, editorType, violations, words, blocked, at }` — after every scan |
+| `scan` | `{ documentKey, editorType, violations, words, blocked, at }` — after every scan, and in answer to every request |
 
 Panel → worker:
 
 | `type` | meaning |
 |---|---|
-| `requestScan` | scan now (the panel saw a selection change) |
-| `requestState` | resend the last `scan` (a panel just opened mid-session) |
+| `requestScan` | scan now if the document changed, else resend the last `scan` (the panel saw a selection change, or its timer ticked) |
+| `requestState` | the same, sent once by a panel that just opened mid-session |
+
+Where the editor marks and blocks by itself (`IsContentPolicyMarksSupported`), a scan only
+feeds the panel's list, so the worker reads the document only while a panel is asking: an
+open panel sends `requestScan` on every tick of its timer, and a worker that has heard
+nothing for 15 s stops reading until the next request. Holding and releasing the save does
+not depend on it. Where the editor cannot mark (pdf, older builds) the worker keeps scanning
+on its own timer, because there it is what holds the save.
 | `rulesChanged` | refetch the rules (the panel's Refresh was pressed) |
 
 Where the browser has no `BroadcastChannel`, or no worker is installed, nothing arrives
