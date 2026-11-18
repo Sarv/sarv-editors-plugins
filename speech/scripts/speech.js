@@ -424,8 +424,9 @@
 		this.executeCommand("close", "");
 	};
 
-    window.onunload = function()
+    // pagehide, not unload: Chrome blocks unload listeners and logs a permissions-policy violation for each
+    window.addEventListener('pagehide', function()
     {
         synth && synth.cancel();
-    };
+    });
 })(window, undefined);
